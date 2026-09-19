@@ -1,0 +1,16 @@
+# Core service
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.7
+PyYAML>=6.0
+
+# Retrieval (gate [1]). No FAISS: 578 x 384 is 888 KB and exhaustive cosine is ~0.15 ms,
+# so an ANN index would be a dependency and a Docker layer bought for nothing.
+rank-bm25>=0.2.2
+
+# Tests
+pytest>=8.0
+httpx>=0.27
+
+# Optional — only needed for LLM_PROVIDER=gemini. CI runs on the offline stub.
+# google-genai>=1.0

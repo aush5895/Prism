@@ -1,0 +1,221 @@
+{
+  "query": "My Galaxy S22 screen inputs are delayed and the touch responsiveness is laggy, causing a noticeable delay when I try to interact with the phone.",
+  "query_variations": [
+    "Touch response on my Galaxy S22 is delayed and unresponsive.",
+    "my s22 touchscreen is super laggy when i tap stuff",
+    "S22 touch lag delayed input screen",
+    "Why does my Galaxy S22 take so long to register a tap?",
+    "Screen input lag on Galaxy S22 after tapping.",
+    "this phone touch is so slow its driving me insane",
+    "Galaxy S22 touchscreen responds late to every touch.",
+    "my galxy s22 tuch screen is laggy and slow to respnd",
+    "Delayed touch registration on Samsung Galaxy S22 display.",
+    "S22 screen takes a second to react when I press anything."
+  ],
+  "response": {
+    "contexts": [
+      {
+        "goal": "Follow these steps to perform this Touchscreen Troubleshooting",
+        "title": "Touchscreen response issues",
+        "score": 0.82,
+        "actions": [
+          {
+            "actionName": "Remove Screen Protector",
+            "description": "It will remove interference from the screen surface",
+            "category": "manual",
+            "stepGroups": [
+              {
+                "steps": [
+                  "Remove any third-party screen protector that is peeling or has debris under it.",
+                  "Wipe the front and back gently with a lint-free microfiber cloth.",
+                  "Avoid applying too much pressure while cleaning."
+                ],
+                "actionableDeeplink": null,
+                "validationDeeplink": null
+              }
+            ]
+          },
+          {
+            "actionName": "Try A Different Charger",
+            "description": "It will rule out insufficient charging power",
+            "category": "manual",
+            "stepGroups": [
+              {
+                "steps": [
+                  "Connect the device to a different, undamaged charger.",
+                  "Avoid using the touchscreen while the device is charging."
+                ],
+                "actionableDeeplink": null,
+                "validationDeeplink": null
+              }
+            ]
+          },
+          {
+            "actionName": "Adjust Touch Sensitivity",
+            "description": "It will match screen response to your protector",
+            "category": "auto",
+            "stepGroups": [
+              {
+                "steps": [
+                  "Navigate to and open Settings.",
+                  "Tap Display.",
+                  "Tap the switch next to Touch sensitivity to enable it."
+                ],
+                "actionableDeeplink": {
+                  "deeplink": "bixby://masked/act/14eb42b895",
+                  "description": "Enables touch sensitivity via device Settings on the device.",
+                  "message": "Enable Touch sensitivity",
+                  "originalType": "onURL"
+                },
+                "validationDeeplink": {
+                  "deeplink": "bixby://masked/val/6451858b28",
+                  "key": "Touch sensitivity",
+                  "resultType": "boolean",
+                  "condition": "equal",
+                  "value": "True"
+                }
+              },
+              {
+                "steps": [
+                  "Navigate to and open Settings.",
+                  "Tap Display.",
+                  "Tap the switch next to Touch sensitivity to disable it."
+                ],
+                "actionableDeeplink": {
+                  "deeplink": "bixby://masked/act/1b0d34e9b4",
+                  "description": "Disables touch sensitivity via device Settings on the device.",
+                  "message": "Disable Touch sensitivity",
+                  "originalType": "offURL"
+                },
+                "validationDeeplink": {
+                  "deeplink": "bixby://masked/val/6451858b28",
+                  "key": "Touch sensitivity"
+                }
+              }
+            ]
+          },
+          {
+            "actionName": "Configure Navigation Bar",
+            "description": "It will stop gestures from misreading your taps",
+            "category": "auto",
+            "stepGroups": [
+              {
+                "steps": [
+                  "Navigate to and open Settings.",
+                  "Tap Display.",
+                  "Tap Navigation bar.",
+                  "Select Buttons to turn off full screen gestures."
+                ],
+                "actionableDeeplink": {
+                  "deeplink": "bixby://masked/act/2f3dd95259",
+                  "description": "Opens the navigation bar settings page in device Settings on the device.",
+                  "message": "View Navigation bar",
+                  "originalType": "onClickURL"
+                },
+                "validationDeeplink": {
+                  "deeplink": "bixby://masked/val/d8310c1b7d",
+                  "key": "Navigation bar"
+                }
+              }
+            ]
+          },
+          {
+            "actionName": "Contact Samsung Support",
+            "description": "It will connect you with Samsung support staff",
+            "category": "manual",
+            "stepGroups": [
+              {
+                "steps": [
+                  "Contact Samsung Support if the issue persists after these steps."
+                ],
+                "actionableDeeplink": null,
+                "validationDeeplink": null
+              }
+            ]
+          },
+          {
+            "actionName": "Restart Your Device",
+            "description": "It will clear temporary glitches affecting touch input",
+            "category": "critical",
+            "stepGroups": [
+              {
+                "steps": [
+                  "Press and hold the Power button.",
+                  "Tap Restart.",
+                  "Tap Restart again to confirm."
+                ],
+                "actionableDeeplink": null,
+                "validationDeeplink": null
+              }
+            ]
+          },
+          {
+            "actionName": "Check Software Update",
+            "description": "It will keep device software fully current",
+            "category": "critical",
+            "stepGroups": [
+              {
+                "steps": [
+                  "Check that your device software is up to date.",
+                  "Check for updates to any third-party apps you use."
+                ],
+                "actionableDeeplink": null,
+                "validationDeeplink": null
+              }
+            ]
+          },
+          {
+            "actionName": "Enter Safe Mode",
+            "description": "It will reveal whether an app causes this",
+            "category": "critical",
+            "stepGroups": [
+              {
+                "steps": [
+                  "Press and hold the Power button and the Volume down button at the same time.",
+                  "Touch and hold Power off.",
+                  "Tap Safe mode.",
+                  "Remove any third-party app installed around the time the issue began.",
+                  "Restart the device to exit Safe mode."
+                ],
+                "actionableDeeplink": null,
+                "validationDeeplink": null
+              }
+            ]
+          },
+          {
+            "actionName": "Perform Factory Data Reset",
+            "description": "It will erase all data and restore defaults",
+            "category": "critical",
+            "stepGroups": [
+              {
+                "steps": [
+                  "Back up your personal data before you continue.",
+                  "Navigate to and open Settings.",
+                  "Tap General management.",
+                  "Tap Reset.",
+                  "Tap Factory data reset.",
+                  "Swipe to and tap Reset.",
+                  "Tap Delete all."
+                ],
+                "actionableDeeplink": {
+                  "deeplink": "bixby://dummy_positive",
+                  "description": "Opens the Factory data reset settings screen",
+                  "message": "Open Factory data reset under General management",
+                  "originalType": "placeholder"
+                },
+                "validationDeeplink": null
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "meta": {
+    "latency_ms": null,
+    "cache_hit": false,
+    "model": null,
+    "cost_usd": null,
+    "_note": "telemetry layer fills these at runtime; never authored"
+  }
+}

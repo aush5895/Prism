@@ -1,0 +1,167 @@
+# Category, tier and scope lexicons.
+#
+# These are DATA, not code (directive 17 / contract §4). They are domain-general:
+# no device model, no complaint text, no article title, no catalog message appears
+# here. Editing this file changes behaviour without touching backend/app.
+#
+# Sources: category definitions from Theme 2 guide §4.1; scope qualifiers derived
+# from catalog inspection (see contract §5.1 for the measured factory-reset trap).
+
+# --- category: critical (guide §4.1 "Disruptive or irreversible operations") ---
+critical:
+  - factory reset
+  - factory data reset
+  - data reset
+  - hard reset
+  - reset the device
+  - restart
+  - reboot
+  - force restart
+  - power off
+  - power cycle
+  - safe mode
+  - recovery mode
+  - software update
+  - firmware update
+  - system update
+  - erase all
+  - delete all
+  - wipe data
+
+# --- category: manual (guide §4.1 "Physical interventions") ---
+manual:
+  - remove the case
+  - remove any
+  - remove the
+  - screen protector
+  - protective film
+  - microfiber
+  - lint-free
+  - wipe the
+  - clean the
+  - eject
+  - ejector
+  - sim tray
+  - flashlight
+  - inspect
+  - physical damage
+  - liquid damage
+  - corrosion
+  - bent pins
+  - replace the
+  - different charger
+  - undamaged charger
+  - usb cable
+  - service center
+  - service centre
+  - samsung support
+  - contact samsung
+  - authorized
+  - repair
+
+# --- physical interaction: forces deeplink = null even when category is critical ---
+# A hardware button sequence is not a Settings screen, so it can never carry a deeplink.
+physical_interaction:
+  - press and hold
+  - touch and hold
+  - hold both
+  - side button
+  - power button
+  - volume down
+  - volume up
+  - hardware key
+  - remove the battery
+  - reinsert
+
+# --- tier 3: service / support escalation (vs tier 0 non-invasive checks) ---
+service_escalation:
+  - service center
+  - service centre
+  - samsung support
+  - contact samsung
+  - contact support
+  - support center
+  - authorized
+  - repair
+  - warranty
+  - technician
+  - replace the hardware
+
+# --- gate [3] scope qualifiers ---
+# A candidate carrying one of these qualifiers is only admissible when the STEP
+# carries it too. This is what rejects "auto factory reset" for "Tap Factory data reset."
+scope_qualifiers:
+  - auto
+  - automatic
+  - automatically
+  - scheduled
+  - schedule
+  - inactivity
+  - preset
+  - talkback
+  - screenshot
+  - screenshots
+  # cross-domain product qualifiers present in the production catalog
+  - refrigerator
+  - washer
+  - dryer
+  - oven
+  - dishwasher
+  - television
+  - watch
+  - buds
+  - earbuds
+  - cover screen
+  - sub screen
+
+# --- generic tap targets that are never a deeplink subject on their own ---
+generic_targets:
+  - settings
+  - "ok"
+  - "confirm"
+  - "done"
+  - "next"
+  - "back"
+  - "yes"   # quoted: bare yes/no/on/off are YAML booleans
+  - "delete all"
+  - "reset"
+
+# --- query enrichment: the four domains named in Theme 2 guide §3 ---
+domains:
+  display:
+    - screen
+    - display
+    - touch
+    - touchscreen
+    - flicker
+    - blank
+    - black
+    - brightness
+    - pixel
+    - blurry
+    - distorted
+  battery:
+    - battery
+    - charge
+    - charging
+    - drain
+    - power
+    - overheat
+    - hot
+  camera:
+    - camera
+    - photo
+    - picture
+    - video
+    - lens
+    - flash
+  performance:
+    - slow
+    - lag
+    - laggy
+    - freeze
+    - hang
+    - crash
+    - delay
+    - delayed
+    - unresponsive
