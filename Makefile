@@ -1,4 +1,4 @@
-.PHONY: install run test test-row21 demo contract-example record-fixtures clean
+.PHONY: install run test test-row21 demo contract-example record-fixtures eval eval-live clean
 
 PY ?= python3
 
@@ -28,6 +28,14 @@ contract-example:
 ## Re-record the extraction fixture (requires a configured provider).
 record-fixtures:
 	$(PY) -m tools.record_fixture_row21
+
+## Regenerate evaluation/report.json + docs/metrics.md. No API key needed.
+eval:
+	$(PY) -m evaluation.run_eval
+
+## The same measurements with extraction served by the live provider.
+eval-live:
+	$(PY) -m evaluation.run_eval --provider gemini
 
 clean:
 	find . -name __pycache__ -type d -prune -exec rm -rf {} + ; rm -rf .pytest_cache

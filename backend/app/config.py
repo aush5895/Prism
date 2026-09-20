@@ -24,6 +24,14 @@ CONCEPT_COVERAGE_MIN = float(os.getenv("PRISM_CONCEPT_COVERAGE_MIN", "0.60"))  #
 MARGIN_DELTA = float(os.getenv("PRISM_MARGIN_DELTA", "0.08"))                 # gate [5]
 CANDIDATE_POOL = int(os.getenv("PRISM_CANDIDATE_POOL", "40"))                 # gate [1]
 
+# Gate [3] reads its scope qualifier from these catalog fields only. Measured: 42 of the
+# 578 entries carry a qualifier ("talkback", "cover screen", "auto") in `description`
+# that never appears in `message` — e.g. DL-0330 "View Speak usage hints" is described as
+# a TalkBack screen. Including `description` therefore rejects correct candidates whose
+# own message a step legitimately names. `message` is the candidate's claim about what it
+# targets; `description` is prose about where it lives.
+SCOPE_FIELDS = tuple(os.getenv("PRISM_SCOPE_FIELDS", "message").split(","))
+
 # ---- score formula (contract §3.4) ----
 SCORE_W_SPAN = 0.40
 SCORE_W_DEEPLINK = 0.30

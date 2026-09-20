@@ -46,7 +46,9 @@ def resolve_actions(extraction: Extraction, catalog: DeeplinkCatalog) -> List[Re
     out: List[ResolvedAction] = []
     for i, action in enumerate(extraction.actions):
         category = ordering.categorize(action)
-        physical = ordering.is_physical(action)
+        # Gate [0]: wording-based (hardware buttons) OR operation-based (the device
+        # restarts / enters safe mode). Either one means "not a Settings screen".
+        physical = ordering.is_physical(action) or ordering.is_device_operation(action)
         resolutions = [
             catalog.resolve_step_group([s.text for s in g.steps], category, physical)
             for g in action.step_groups

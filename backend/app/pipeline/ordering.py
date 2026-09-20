@@ -35,6 +35,20 @@ def is_physical(action: ExtractedAction) -> bool:
     return contains_any(action_text(action), load_lexicons()["physical_interaction"]) is not None
 
 
+def is_device_operation(action: ExtractedAction) -> bool:
+    """A state the DEVICE enters (restart, safe mode, recovery mode) rather than a screen
+    Settings can open.
+
+    is_physical() is not sufficient on its own because it keys on step WORDING. An
+    extraction that phrases a reboot as "Tap Restart." contains no hardware-button phrase,
+    so gate [0] let it through and the resolver matched it against the catalog — observed
+    output: a restart action carrying "Open Restart under Restart again". This predicate
+    keys on the action as a whole instead, so the same operation is caught however it is
+    written. Factory reset is excluded from the lexicon: it is a real Settings screen.
+    """
+    return contains_any(action_text(action), load_lexicons()["critical_device_operation"]) is not None
+
+
 def categorize(action: ExtractedAction) -> str:
     """Rules first, hint second, schema default last.
 

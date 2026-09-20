@@ -34,6 +34,19 @@ ALLOWED_TYPES: Dict[str, set[str]] = {
     "VIEW": {"onClickURL"},
 }
 
+# ---------------------------------------------------------------- switchable gates
+# Named so evaluation/run_eval.py can measure each gate's contribution by ablation.
+# Production always runs GATES_ALL; nothing in backend/app ever passes a subset.
+# Gate [1] retrieval and gate [6] catalog identity are NOT switchable: [1] produces the
+# candidate pool there would be nothing to gate without, and [6] is the safety assertion
+# that an emitted URI is the catalog's own.
+GATE_POLARITY = "polarity"
+GATE_SCOPE = "scope"
+GATE_CONCEPT = "concept"
+GATE_MARGIN = "margin"
+GATES_ALL = frozenset({GATE_POLARITY, GATE_SCOPE, GATE_CONCEPT, GATE_MARGIN})
+GATES_NONE: frozenset[str] = frozenset()
+
 # A step is eligible for deeplink resolution only if it INSTRUCTS a UI interaction.
 # Advisory or preparatory prose ("Back up your personal data before you continue.") names
 # no screen, so it must never be resolved. Measured failure this prevents: that exact step
@@ -141,8 +154,16 @@ class DeeplinkCatalog:
         v = entry.get("validation")
         return dict(v) if v else None
 
+    def _scope_blob(self, entry: Dict[str, Any]) -> str:
+        """Gate [3] reads only the fields config.SCOPE_FIELDS names — `message` by
+        default. See the note on config.SCOPE_FIELDS for why `description` is excluded."""
+        return " ".join(str(entry.get(f) or "") for f in config.SCOPE_FIELDS)
+
     # -------------------------------------------------- gates [1]-[5], one step
-    def resolve_step(self, step: str) -> Resolution:
+    def resolve_step(self, step: str, gates: Optional[frozenset[str]] = None) -> Resolution:
+        """`gates` exists for the ablation harness only; it defaults to every gate and no
+        caller in backend/app passes anything else."""
+        active = GATES_ALL if gates is None else gates
         intent = parse_intent(step)
         allowed = ALLOWED_TYPES[intent]
         qualifiers = self._lex["scope_qualifiers"]
@@ -159,16 +180,18 @@ class DeeplinkCatalog:
             norm = scores[i] / peak
             cov = coverage(e["message"], step)
 
+            # The placeholder is never selected BY RETRIEVAL under any gate configuration:
+            # it is the fallback the resolver authors, not a candidate it can match.
             if e["deeplink"] == config.DUMMY_DEEPLINK:
-                verdict = "reject:placeholder"          # never selected by retrieval
-            elif e["originalType"] not in allowed:
+                verdict = "reject:placeholder"
+            elif GATE_POLARITY in active and e["originalType"] not in allowed:
                 verdict = "reject:polarity"             # gate [2]
             else:
-                blob = f"{e['description']} {e['message']}"
-                hit = contains_any(blob, qualifiers)
+                hit = (contains_any(self._scope_blob(e), qualifiers)
+                       if GATE_SCOPE in active else None)
                 if hit and not contains_any(step, [hit]):
                     verdict = f"reject:scope({hit})"    # gate [3]
-                elif cov < config.CONCEPT_COVERAGE_MIN:
+                elif GATE_CONCEPT in active and cov < config.CONCEPT_COVERAGE_MIN:
                     verdict = "reject:concept"          # gate [4]
                 else:
                     verdict = "eligible"
@@ -180,7 +203,7 @@ class DeeplinkCatalog:
             return Resolution("none", "no_candidate_survived_gates", trace=trace)
 
         # Gate [5]. A single survivor needs no comparison (directive 7).
-        if len(survivors) > 1:
+        if GATE_MARGIN in active and len(survivors) > 1:
             gap = survivors[0][0] - survivors[1][0]
             if gap < config.MARGIN_DELTA:
                 for t in trace:
@@ -195,12 +218,15 @@ class DeeplinkCatalog:
                           self._emit_validation(entry), entry["id"], trace)
 
     # -------------------------------------------------- gate [0] + group resolution
-    def resolve_step_group(self, steps: Sequence[str], category: str, physical: bool) -> Resolution:
+    def resolve_step_group(self, steps: Sequence[str], category: str, physical: bool,
+                           gates: Optional[frozenset[str]] = None) -> Resolution:
         """Resolve one stepGroup to at most one deeplink.
 
         Gate [0] short-circuits before any retrieval runs:
           - category "manual" may never carry an actionable deeplink (guide §4.1)
           - a hardware-button sequence is not a Settings screen, whatever its category
+        `physical` now covers device OPERATIONS as well as hardware-button wording; see
+        ordering.is_device_operation for why wording alone was not enough.
         """
         if category == "manual":
             return Resolution("none", "manual_category_forbids_deeplink")
@@ -213,7 +239,7 @@ class DeeplinkCatalog:
         for step in reversed(list(steps)):
             if not _UI_INSTRUCTION.search(step):
                 continue
-            last = self.resolve_step(step)
+            last = self.resolve_step(step, gates=gates)
             if last.is_exact:
                 return last
 

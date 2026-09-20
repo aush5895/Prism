@@ -6,8 +6,21 @@ target-concept gate existed (contract §5.1). They exist so those failures canno
 import pytest
 
 from app import config
+from app.ir import ExtractedAction, ExtractedStep, ExtractedStepGroup, Extraction
+from app.pipeline import assemble, ordering
 from app.pipeline.deeplinks import parse_intent
 from app.text import coverage
+
+
+def _action(name: str, steps: list[str], hint: str | None = None) -> ExtractedAction:
+    """Build a one-group action from step text. Synthetic, domain-general: no fixture
+    string and no catalog message (directive 17)."""
+    return ExtractedAction(
+        action_name=name,
+        description=f"It will address {name.lower()} on your device",
+        category_hint=hint,
+        step_groups=[ExtractedStepGroup(steps=[ExtractedStep(text=s) for s in steps])],
+    )
 
 
 # ------------------------------------------------------------ gate [2] polarity
@@ -51,20 +64,49 @@ def test_onurl_carries_full_validation_and_offurl_key_only(catalog):
 
 
 # ------------------------------------------------------------ gate [3] scope
-def test_factory_reset_trap_is_rejected_on_scope(catalog):
+def test_factory_reset_trap_is_never_emitted(catalog):
     """REGRESSION: DL-0022 'auto factory reset' ranks #1 on BM25 for this step. It is a
-    scheduling preference, not the reset action. It must never be emitted."""
+    scheduling preference, not the reset action, and must never be emitted.
+
+    Asserts the CONTRACT (it is rejected), not the MECHANISM (which gate rejects it).
+    It has moved gates once already: it was a scope rejection while gate [3] read the
+    candidate's `description`, and became a concept rejection at coverage 0.50 when
+    config.SCOPE_FIELDS narrowed gate [3] to `message`. Both are correct outcomes; pinning
+    the gate made a real improvement look like a regression.
+    """
     res = catalog.resolve_step("Tap Factory data reset.")
     assert not res.is_exact
-    assert any(t.catalog_id == "DL-0022" and t.verdict.startswith("reject:scope") for t in res.trace)
+    assert res.catalog_id != "DL-0022"
+    verdicts = {t.catalog_id: t.verdict for t in res.trace}
+    assert verdicts["DL-0022"].startswith("reject:")
+
+
+def test_scope_gate_rejects_a_qualifier_the_step_does_not_ask_for(catalog):
+    """'Sync' must not reach 'Enable Auto-Sync': automatic syncing is a different feature
+    from syncing, separable only by the qualifier the step never uses."""
+    res = catalog.resolve_step("Tap the switch next to Sync to enable it.")
+    assert not res.is_exact
+    rejected = [t for t in res.trace if t.verdict == "reject:scope(auto)"]
+    assert any(t.message == "Enable Auto-Sync" for t in rejected)
 
 
 def test_scope_qualifier_admitted_when_the_step_shares_it(catalog):
     """The gate rejects unmatched qualifiers, not the qualifier itself — a step that does
-    ask for the automatic variant must still be able to reach it."""
-    res = catalog.resolve_step("Tap Auto factory reset.")
-    assert not any(t.catalog_id == "DL-0022" and t.verdict.startswith("reject:scope")
-                   for t in res.trace)
+    ask for the automatic variant must still reach it."""
+    res = catalog.resolve_step("Tap the switch next to Auto Restart to enable it.")
+    assert res.is_exact and res.catalog_id == "DL-0480"
+    assert res.deeplink["message"] == "Enable Auto Restart"
+
+
+def test_scope_gate_reads_only_the_configured_fields(catalog):
+    """42 of the 578 entries carry a qualifier in `description` that never appears in
+    `message` (e.g. DL-0330 'View Speak usage hints' is described as a TalkBack screen).
+    Gate [3] must not reject those on a word the candidate's own message never claims."""
+    assert config.SCOPE_FIELDS == ("message",)
+    entry = catalog.by_id["DL-0330"]
+    assert "talkback" in entry["description"].lower()
+    assert "talkback" not in entry["message"].lower()
+    assert "talkback" not in catalog._scope_blob(entry).lower()
 
 
 # ------------------------------------------------------------ gate [4] target concept
@@ -155,6 +197,43 @@ def test_manual_category_never_receives_a_deeplink(catalog):
 def test_physical_interaction_never_receives_a_deeplink(catalog):
     res = catalog.resolve_step_group(["Tap Navigation bar."], category="critical", physical=True)
     assert res.decision == "none" and res.deeplink is None
+
+
+def test_device_operation_gets_null_however_the_step_is_worded(catalog):
+    """REGRESSION: gate [0]'s physical check keys on step WORDING. An extraction that
+    writes a reboot as 'Tap Restart.' carries no hardware-button phrase, so the resolver
+    used to reach the catalog and hand a device REBOOT a Settings deeplink. Observed
+    output before the fix: dummy_positive 'Open Restart again under Restart'.
+
+    A restart is a state the device enters, not a screen Settings can open.
+    """
+    action = _action("Restart the device", ["Tap Restart.", "Tap Restart again to confirm."],
+                     hint="critical")
+    assert ordering.is_physical(action) is False      # the wording alone catches nothing
+    assert ordering.is_device_operation(action) is True
+
+    resolved = assemble.resolve_actions(Extraction(goal_topic="T", title="t", actions=[action]),
+                                        catalog)
+    for res in resolved[0].resolutions:
+        assert res.decision == "none"
+        assert res.deeplink is None
+
+
+def test_factory_reset_is_not_a_device_operation_and_keeps_dummy_positive(catalog):
+    """The counterpart: factory reset genuinely lives at Settings > General management >
+    Reset, so it must stay OUT of the device-operation lexicon and keep its
+    dummy_positive. This is the line the lexicon has to draw."""
+    action = _action("Perform factory reset",
+                     ["Navigate to and open Settings.", "Tap General management.",
+                      "Tap Reset.", "Tap Factory data reset."], hint="critical")
+    assert ordering.is_device_operation(action) is False
+
+    resolved = assemble.resolve_actions(Extraction(goal_topic="T", title="t", actions=[action]),
+                                        catalog)
+    res = resolved[0].resolutions[0]
+    assert res.decision == "dummy_positive"
+    assert res.deeplink["deeplink"] == config.DUMMY_DEEPLINK
+    assert "Factory data reset" in res.deeplink["message"]
 
 
 # ------------------------------------------------------------ dummy_positive

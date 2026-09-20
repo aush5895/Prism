@@ -73,6 +73,27 @@ physical_interaction:
   - remove the battery
   - reinsert
 
+# --- device operations: forces deeplink = null regardless of step WORDING ---
+# physical_interaction above keys on how a step is phrased ("press and hold the Power
+# button"). An extractor that writes the same action as "Tap Restart." leaves no physical
+# phrase behind, and the resolver then hands a device reboot a Settings deeplink —
+# observed output: a restart action emitted "Open Restart under Restart again". These
+# operations are states the DEVICE enters, not screens Settings can open, so they are
+# matched on the action as a whole, not on button wording.
+#
+# Factory reset is deliberately ABSENT: it genuinely lives at
+# Settings > General management > Reset, so it keeps its dummy_positive resolution.
+critical_device_operation:
+  - restart
+  - reboot
+  - force restart
+  - power off
+  - power cycle
+  - turn off the device
+  - safe mode
+  - recovery mode
+  - download mode
+
 # --- tier 3: service / support escalation (vs tier 0 non-invasive checks) ---
 service_escalation:
   - service center

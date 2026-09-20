@@ -1,0 +1,760 @@
+{
+  "generated_at_utc": "2026-09-20T21:23:12Z",
+  "provider_requested": "gemini",
+  "catalog": {
+    "n_entries": 578,
+    "n_unique_uris": 578
+  },
+  "config": {
+    "concept_coverage_min": 0.6,
+    "margin_delta": 0.08,
+    "candidate_pool": 40,
+    "scope_fields": [
+      "message"
+    ]
+  },
+  "gold_set": {
+    "n_cases": 850,
+    "n_classes": 425,
+    "cases_by_type": {
+      "offURL": 226,
+      "onClickURL": 340,
+      "onURL": 222,
+      "updateURL": 62
+    },
+    "cases_in_duplicate_classes": 104,
+    "n_ambiguous_enable_disable_subjects": 111,
+    "duplicates": {
+      "entries_resolvable": 566,
+      "distinct_classes": 427,
+      "classes_with_duplicates": 54,
+      "entries_in_duplicate_classes": 193,
+      "share_entries_in_duplicate_classes": 0.341,
+      "class_size_histogram": {
+        "1": 373,
+        "2": 31,
+        "3": 14,
+        "5": 1,
+        "6": 3,
+        "7": 1,
+        "9": 1,
+        "13": 1,
+        "16": 1,
+        "21": 1
+      },
+      "largest_classes": [
+        {
+          "message": "View Notification Settings",
+          "originalType": "onClickURL",
+          "n": 21
+        },
+        {
+          "message": "View Sound Settings",
+          "originalType": "onClickURL",
+          "n": 16
+        },
+        {
+          "message": "View Magnification Settings",
+          "originalType": "onClickURL",
+          "n": 13
+        },
+        {
+          "message": "Check Battery Performance",
+          "originalType": "onClickURL",
+          "n": 9
+        },
+        {
+          "message": "View Timeout Settings",
+          "originalType": "onClickURL",
+          "n": 7
+        },
+        {
+          "message": "Enable Adaptive Display",
+          "originalType": "onURL",
+          "n": 6
+        },
+        {
+          "message": "View Device Details",
+          "originalType": "onClickURL",
+          "n": 6
+        },
+        {
+          "message": "View WiFi Settings",
+          "originalType": "onClickURL",
+          "n": 6
+        },
+        {
+          "message": "Disable Adaptive Display",
+          "originalType": "offURL",
+          "n": 5
+        },
+        {
+          "message": "Disable Sound Amplification",
+          "originalType": "offURL",
+          "n": 3
+        }
+      ]
+    }
+  },
+  "compliance": {
+    "provider": "gemini:gemini-3.1-flash-lite",
+    "n_rows": 20,
+    "rows_with_plan": 20,
+    "rows_fallback": 0,
+    "schema_valid_pct": 100.0,
+    "rule_compliant_pct": 100.0,
+    "url_leaks": 0,
+    "catalog_invalid_deeplinks": 0,
+    "total_actions": 82,
+    "total_resolved": 6,
+    "total_dummy_positive": 5,
+    "total_null": 76,
+    "auto_step_groups": 12,
+    "auto_step_groups_with_deeplink": 9,
+    "auto_step_groups_with_deeplink_pct": 75.0,
+    "latency_p50_ms": 3216.8,
+    "latency_p95_ms": 4726.7,
+    "latency_mean_ms": 3652.3,
+    "total_cost_usd": 0.03447,
+    "per_row": [
+      {
+        "id": "row_1",
+        "actions": 6,
+        "resolved": 0,
+        "dummy_positive": 2,
+        "null": 6,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 4726.7
+      },
+      {
+        "id": "row_2",
+        "actions": 6,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 6,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 4029.7
+      },
+      {
+        "id": "row_3",
+        "actions": 4,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 4,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 3343.3
+      },
+      {
+        "id": "row_4",
+        "actions": 6,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 6,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 4238.2
+      },
+      {
+        "id": "row_5",
+        "actions": 3,
+        "resolved": 1,
+        "dummy_positive": 1,
+        "null": 1,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 2632.4
+      },
+      {
+        "id": "row_7",
+        "actions": 1,
+        "resolved": 1,
+        "dummy_positive": 0,
+        "null": 0,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 2049.5
+      },
+      {
+        "id": "row_8",
+        "actions": 1,
+        "resolved": 1,
+        "dummy_positive": 0,
+        "null": 0,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 2532.2
+      },
+      {
+        "id": "row_9",
+        "actions": 2,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 2,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 2824.0
+      },
+      {
+        "id": "row_10",
+        "actions": 1,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 1,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 1739.7
+      },
+      {
+        "id": "row_11",
+        "actions": 3,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 3,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 2956.9
+      },
+      {
+        "id": "row_12",
+        "actions": 1,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 1,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 1988.5
+      },
+      {
+        "id": "row_13",
+        "actions": 5,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 5,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 4193.3
+      },
+      {
+        "id": "row_14",
+        "actions": 3,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 3,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 2423.0
+      },
+      {
+        "id": "row_15",
+        "actions": 6,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 6,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 4533.5
+      },
+      {
+        "id": "row_16",
+        "actions": 6,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 6,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 4265.0
+      },
+      {
+        "id": "row_17",
+        "actions": 4,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 4,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 3090.3
+      },
+      {
+        "id": "row_19",
+        "actions": 3,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 3,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 2546.6
+      },
+      {
+        "id": "row_20",
+        "actions": 6,
+        "resolved": 1,
+        "dummy_positive": 1,
+        "null": 5,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 4473.1
+      },
+      {
+        "id": "row_21",
+        "actions": 10,
+        "resolved": 2,
+        "dummy_positive": 1,
+        "null": 9,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 9861.5
+      },
+      {
+        "id": "row_22",
+        "actions": 5,
+        "resolved": 0,
+        "dummy_positive": 0,
+        "null": 5,
+        "schema_valid": true,
+        "schema_error": null,
+        "rule_compliant": true,
+        "rule_error": null,
+        "url_leak": false,
+        "catalog_invalid": 0,
+        "fallback": null,
+        "latency_ms": 4598.8
+      }
+    ]
+  },
+  "resolution": {
+    "n_cases": 850,
+    "correct": 760,
+    "wrong": 10,
+    "abstained": 80,
+    "accuracy_at_1_pct": 89.4,
+    "wrong_pct": 1.2,
+    "abstained_pct": 9.4,
+    "precision_pct": 98.7,
+    "wrong_examples": [
+      {
+        "step": "Tap the switch next to Charging Feedback to disable it.",
+        "gold_ids": [
+          "DL-0407"
+        ],
+        "gold_message": "Disable Charging Feedback",
+        "gold_type": "offURL",
+        "got_id": "DL-0058",
+        "got_message": "Disable Charging",
+        "got_type": "offURL"
+      },
+      {
+        "step": "Turn off Charging Feedback.",
+        "gold_ids": [
+          "DL-0407"
+        ],
+        "gold_message": "Disable Charging Feedback",
+        "gold_type": "offURL",
+        "got_id": "DL-0058",
+        "got_message": "Disable Charging",
+        "got_type": "offURL"
+      },
+      {
+        "step": "Turn off Double tap to turn on screen.",
+        "gold_ids": [
+          "DL-0088"
+        ],
+        "gold_message": "Disable Double tap to turn on screen",
+        "gold_type": "offURL",
+        "got_id": "DL-0090",
+        "got_message": "Disable Double tap to turn off screen",
+        "got_type": "offURL"
+      },
+      {
+        "step": "Tap the switch next to Double tap to turn off screen to enable it.",
+        "gold_ids": [
+          "DL-0091"
+        ],
+        "gold_message": "Enable Double tap to turn off screen",
+        "gold_type": "onURL",
+        "got_id": "DL-0090",
+        "got_message": "Disable Double tap to turn off screen",
+        "got_type": "offURL"
+      },
+      {
+        "step": "Turn on Double tap to turn off screen.",
+        "gold_ids": [
+          "DL-0091"
+        ],
+        "gold_message": "Enable Double tap to turn off screen",
+        "gold_type": "onURL",
+        "got_id": "DL-0090",
+        "got_message": "Disable Double tap to turn off screen",
+        "got_type": "offURL"
+      },
+      {
+        "step": "Turn on Double tap to turn on screen.",
+        "gold_ids": [
+          "DL-0089"
+        ],
+        "gold_message": "Enable Double tap to turn on screen",
+        "gold_type": "onURL",
+        "got_id": "DL-0091",
+        "got_message": "Enable Double tap to turn off screen",
+        "got_type": "onURL"
+      },
+      {
+        "step": "Tap the switch next to Palm touch to turn off screen to enable it.",
+        "gold_ids": [
+          "DL-0189"
+        ],
+        "gold_message": "Enable Palm touch to turn off screen",
+        "gold_type": "onURL",
+        "got_id": "DL-0188",
+        "got_message": "Disable Palm touch to turn off screen",
+        "got_type": "offURL"
+      },
+      {
+        "step": "Turn on Palm touch to turn off screen.",
+        "gold_ids": [
+          "DL-0189"
+        ],
+        "gold_message": "Enable Palm touch to turn off screen",
+        "gold_type": "onURL",
+        "got_id": "DL-0188",
+        "got_message": "Disable Palm touch to turn off screen",
+        "got_type": "offURL"
+      }
+    ]
+  },
+  "ablation": [
+    {
+      "stage": "V0",
+      "gates": "no gates",
+      "n_cases": 850,
+      "correct": 581,
+      "wrong": 269,
+      "abstained": 0,
+      "accuracy_at_1_pct": 68.4,
+      "wrong_pct": 31.6,
+      "abstained_pct": 0.0,
+      "precision_pct": 68.4
+    },
+    {
+      "stage": "V1",
+      "gates": "+ polarity",
+      "n_cases": 850,
+      "correct": 709,
+      "wrong": 141,
+      "abstained": 0,
+      "accuracy_at_1_pct": 83.4,
+      "wrong_pct": 16.6,
+      "abstained_pct": 0.0,
+      "precision_pct": 83.4
+    },
+    {
+      "stage": "V2",
+      "gates": "+ scope",
+      "n_cases": 850,
+      "correct": 709,
+      "wrong": 141,
+      "abstained": 0,
+      "accuracy_at_1_pct": 83.4,
+      "wrong_pct": 16.6,
+      "abstained_pct": 0.0,
+      "precision_pct": 83.4
+    },
+    {
+      "stage": "V3",
+      "gates": "+ target concept",
+      "n_cases": 850,
+      "correct": 823,
+      "wrong": 23,
+      "abstained": 4,
+      "accuracy_at_1_pct": 96.8,
+      "wrong_pct": 2.7,
+      "abstained_pct": 0.5,
+      "precision_pct": 97.3
+    },
+    {
+      "stage": "V4",
+      "gates": "+ margin (shipped)",
+      "n_cases": 850,
+      "correct": 760,
+      "wrong": 10,
+      "abstained": 80,
+      "accuracy_at_1_pct": 89.4,
+      "wrong_pct": 1.2,
+      "abstained_pct": 9.4,
+      "precision_pct": 98.7
+    }
+  ],
+  "margin_sweep": {
+    "seed": 20260921,
+    "n_fit": 425,
+    "n_holdout": 425,
+    "selection_rule": "max accuracy@1 subject to precision >= 98.0%",
+    "precision_floor_pct": 98.0,
+    "materiality_bar_cases": 5,
+    "shipped_margin_delta": 0.08,
+    "selected_margin_delta": 0.06,
+    "selection_met_floor": true,
+    "holdout_gained_correct": 2,
+    "holdout_extra_wrong": 2,
+    "recommend_change": false,
+    "verdict": "\u03b4 = 0.06 is worth only 2 more correct answers on the held-out half and produces +2 wrong ones, inside the 5-case materiality bar. The shipped \u03b4 = 0.08 also yields the lower wrong rate (0.7% against 1.2%), which is the error this project weights hardest. Keep \u03b4 = 0.08.",
+    "fit_sweep": [
+      {
+        "margin_delta": 0.0,
+        "n_cases": 425,
+        "correct": 408,
+        "wrong": 15,
+        "abstained": 2,
+        "accuracy_at_1_pct": 96.0,
+        "wrong_pct": 3.5,
+        "abstained_pct": 0.5,
+        "precision_pct": 96.5
+      },
+      {
+        "margin_delta": 0.01,
+        "n_cases": 425,
+        "correct": 395,
+        "wrong": 12,
+        "abstained": 18,
+        "accuracy_at_1_pct": 92.9,
+        "wrong_pct": 2.8,
+        "abstained_pct": 4.2,
+        "precision_pct": 97.1
+      },
+      {
+        "margin_delta": 0.02,
+        "n_cases": 425,
+        "correct": 390,
+        "wrong": 10,
+        "abstained": 25,
+        "accuracy_at_1_pct": 91.8,
+        "wrong_pct": 2.4,
+        "abstained_pct": 5.9,
+        "precision_pct": 97.5
+      },
+      {
+        "margin_delta": 0.03,
+        "n_cases": 425,
+        "correct": 385,
+        "wrong": 10,
+        "abstained": 30,
+        "accuracy_at_1_pct": 90.6,
+        "wrong_pct": 2.4,
+        "abstained_pct": 7.1,
+        "precision_pct": 97.5
+      },
+      {
+        "margin_delta": 0.04,
+        "n_cases": 425,
+        "correct": 383,
+        "wrong": 10,
+        "abstained": 32,
+        "accuracy_at_1_pct": 90.1,
+        "wrong_pct": 2.4,
+        "abstained_pct": 7.5,
+        "precision_pct": 97.5
+      },
+      {
+        "margin_delta": 0.06,
+        "n_cases": 425,
+        "correct": 377,
+        "wrong": 7,
+        "abstained": 41,
+        "accuracy_at_1_pct": 88.7,
+        "wrong_pct": 1.6,
+        "abstained_pct": 9.6,
+        "precision_pct": 98.2
+      },
+      {
+        "margin_delta": 0.08,
+        "n_cases": 425,
+        "correct": 372,
+        "wrong": 7,
+        "abstained": 46,
+        "accuracy_at_1_pct": 87.5,
+        "wrong_pct": 1.6,
+        "abstained_pct": 10.8,
+        "precision_pct": 98.2
+      },
+      {
+        "margin_delta": 0.12,
+        "n_cases": 425,
+        "correct": 366,
+        "wrong": 7,
+        "abstained": 52,
+        "accuracy_at_1_pct": 86.1,
+        "wrong_pct": 1.6,
+        "abstained_pct": 12.2,
+        "precision_pct": 98.1
+      },
+      {
+        "margin_delta": 0.16,
+        "n_cases": 425,
+        "correct": 357,
+        "wrong": 4,
+        "abstained": 64,
+        "accuracy_at_1_pct": 84.0,
+        "wrong_pct": 0.9,
+        "abstained_pct": 15.1,
+        "precision_pct": 98.9
+      }
+    ],
+    "holdout": {
+      "0.06": {
+        "margin_delta": 0.06,
+        "n_cases": 425,
+        "correct": 390,
+        "wrong": 5,
+        "abstained": 30,
+        "accuracy_at_1_pct": 91.8,
+        "wrong_pct": 1.2,
+        "abstained_pct": 7.1,
+        "precision_pct": 98.7
+      },
+      "0.08": {
+        "margin_delta": 0.08,
+        "n_cases": 425,
+        "correct": 388,
+        "wrong": 3,
+        "abstained": 34,
+        "accuracy_at_1_pct": 91.3,
+        "wrong_pct": 0.7,
+        "abstained_pct": 8.0,
+        "precision_pct": 99.2
+      }
+    }
+  },
+  "scope_fields_comparison": {
+    "message_only_shipped": {
+      "scope_fields": [
+        "message"
+      ],
+      "n_cases": 850,
+      "correct": 760,
+      "wrong": 10,
+      "abstained": 80,
+      "accuracy_at_1_pct": 89.4,
+      "wrong_pct": 1.2,
+      "abstained_pct": 9.4,
+      "precision_pct": 98.7
+    },
+    "message_and_description_previous": {
+      "scope_fields": [
+        "message",
+        "description"
+      ],
+      "n_cases": 850,
+      "correct": 711,
+      "wrong": 16,
+      "abstained": 123,
+      "accuracy_at_1_pct": 83.6,
+      "wrong_pct": 1.9,
+      "abstained_pct": 14.5,
+      "precision_pct": 97.8
+    }
+  },
+  "cache": {
+    "status": "not implemented (D3b)",
+    "exact_hit_rate_pct": null,
+    "paraphrase_hit_rate_pct": null,
+    "fast_path_p95_ms": null
+  },
+  "wall_clock_s": 119.3
+}
