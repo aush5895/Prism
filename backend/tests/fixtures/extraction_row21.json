@@ -1,75 +1,108 @@
 {
-  "_recorded_from": "hand-recorded reference extraction (D1); re-record with Gemini",
+  "_recorded_from": "gemini:gemini-3.1-flash-lite",
   "_row_id": "row_21",
-  "goal_topic": "Touchscreen",
-  "title": "Touchscreen response issues",
+  "goal_topic": "Touchscreen Performance",
+  "title": "Touchscreen responsiveness issues",
   "actions": [
     {
-      "action_name": "Remove Screen Protector",
-      "description": "It will remove interference from the screen surface",
+      "action_name": "Remove screen accessories",
+      "description": "It will remove physical obstructions that may interfere with touch input.",
       "category_hint": "manual",
-      "source_span": [
-        830,
-        1725
-      ],
       "step_groups": [
         {
           "steps": [
             {
-              "text": "Remove any third-party screen protector that is peeling or has debris under it.",
+              "text": "Remove the screen protector if it is peeling or has debris under it.",
               "source_span": [
-                830,
-                907
-              ]
-            },
-            {
-              "text": "Wipe the front and back gently with a lint-free microfiber cloth.",
-              "source_span": [
-                1567,
-                1637
-              ]
-            },
-            {
-              "text": "Avoid applying too much pressure while cleaning.",
-              "source_span": [
-                1671,
-                1725
+                445,
+                475
               ]
             }
           ]
         }
+      ],
+      "source_span": [
+        365,
+        475
       ]
     },
     {
-      "action_name": "Adjust Touch Sensitivity",
-      "description": "It will match screen response to your protector",
+      "action_name": "Adjust touch sensitivity",
+      "description": "It will improve touch recognition when using a screen protector.",
       "category_hint": "auto",
-      "source_span": [
-        954,
-        3504
-      ],
       "step_groups": [
         {
           "steps": [
             {
-              "text": "Navigate to and open Settings.",
+              "text": "Open Settings.",
               "source_span": [
-                1019,
-                1033
+                535,
+                543
               ]
             },
             {
               "text": "Tap Display.",
               "source_span": [
-                1035,
-                1046
+                549,
+                556
               ]
             },
             {
-              "text": "Tap the switch next to Touch sensitivity to enable it.",
+              "text": "Tap the switch next to Touch sensitivity.",
               "source_span": [
-                954,
-                1005
+                563,
+                578
+              ]
+            }
+          ]
+        }
+      ],
+      "source_span": [
+        476,
+        578
+      ]
+    },
+    {
+      "action_name": "Clean the screen",
+      "description": "It will remove moisture or debris that may cause sensor malfunctions.",
+      "category_hint": "manual",
+      "step_groups": [
+        {
+          "steps": [
+            {
+              "text": "Gently wipe the front and back with a lint-free, soft microfiber cloth or a camera lens cleaning cloth.",
+              "source_span": [
+                905,
+                985
+              ]
+            }
+          ]
+        }
+      ],
+      "source_span": [
+        855,
+        985
+      ]
+    },
+    {
+      "action_name": "Restart the device",
+      "description": "It will clear minor software glitches affecting the touchscreen.",
+      "category_hint": "critical",
+      "step_groups": [
+        {
+          "steps": [
+            {
+              "text": "Press and hold the Power button, then tap Restart.",
+              "source_span": [
+                1145,
+                1195
+              ]
+            },
+            {
+              "text": "Tap Restart again to confirm.",
+              "source_span": [
+                1196,
+                1223
               ]
             }
           ]
@@ -77,314 +110,272 @@
         {
           "steps": [
             {
-              "text": "Navigate to and open Settings.",
+              "text": "Swipe down from the top of the screen with two fingers to open the Quick settings panel.",
               "source_span": [
-                3406,
-                3426
+                1255,
+                1343
               ]
             },
             {
-              "text": "Tap Display.",
+              "text": "Tap the Power icon, then tap Restart.",
               "source_span": [
-                1035,
-                1097
-              ]
-            },
-            {
-              "text": "Tap the switch next to Touch sensitivity to disable it.",
-              "source_span": [
-                3450,
-                3504
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "action_name": "Restart Your Device",
-      "description": "It will clear temporary glitches affecting touch input",
-      "category_hint": "critical",
-      "source_span": [
-        1985,
-        2065
-      ],
-      "step_groups": [
-        {
-          "steps": [
-            {
-              "text": "Press and hold the Power button.",
-              "source_span": [
-                1985,
-                2035
-              ]
-            },
-            {
-              "text": "Tap Restart.",
-              "source_span": [
-                2018,
-                2034
+                1344,
+                1381
               ]
             },
             {
               "text": "Tap Restart again to confirm.",
               "source_span": [
-                2036,
-                2065
+                1382,
+                1409
               ]
             }
           ]
-        }
-      ]
-    },
-    {
-      "action_name": "Try A Different Charger",
-      "description": "It will rule out insufficient charging power",
-      "category_hint": "manual",
-      "source_span": [
-        2709,
-        2844
-      ],
-      "step_groups": [
+        },
         {
           "steps": [
             {
-              "text": "Connect the device to a different, undamaged charger.",
+              "text": "Press and hold the Volume down button and the Power button simultaneously for about 10 seconds.",
               "source_span": [
-                2709,
-                2756
+                1475,
+                1570
               ]
             },
             {
-              "text": "Avoid using the touchscreen while the device is charging.",
+              "text": "Press the Power button or Side button again to turn it back on.",
               "source_span": [
-                2787,
-                2844
+                1605,
+                1667
               ]
             }
           ]
         }
+      ],
+      "source_span": [
+        1055,
+        1455
       ]
     },
     {
-      "action_name": "Configure Navigation Bar",
-      "description": "It will stop gestures from misreading your taps",
-      "category_hint": "auto",
-      "source_span": [
-        3092,
-        3198
-      ],
+      "action_name": "Change the charger",
+      "description": "It will ensure the device receives adequate power to prevent malfunctions.",
+      "category_hint": "manual",
       "step_groups": [
         {
           "steps": [
             {
-              "text": "Navigate to and open Settings.",
+              "text": "Use a different, undamaged charger.",
               "source_span": [
-                3092,
-                3149
+                1785,
+                1818
+              ]
+            }
+          ]
+        }
+      ],
+      "source_span": [
+        1675,
+        1855
+      ]
+    },
+    {
+      "action_name": "Disable full screen gestures",
+      "description": "It will prevent touch inputs from being misinterpreted as gestures.",
+      "category_hint": "auto",
+      "step_groups": [
+        {
+          "steps": [
+            {
+              "text": "Go to Settings.",
+              "source_span": [
+                2045,
+                2059
               ]
             },
             {
               "text": "Tap Display.",
               "source_span": [
-                3108,
-                3148
+                2065,
+                2072
               ]
             },
             {
               "text": "Tap Navigation bar.",
               "source_span": [
-                3130,
-                3148
+                2078,
+                2096
               ]
             },
             {
-              "text": "Select Buttons to turn off full screen gestures.",
+              "text": "Select Buttons.",
               "source_span": [
-                3150,
-                3198
+                2097,
+                2112
               ]
             }
           ]
         }
+      ],
+      "source_span": [
+        1925,
+        2125
       ]
     },
     {
-      "action_name": "Check Software Update",
-      "description": "It will keep device software fully current",
-      "category_hint": "critical",
-      "source_span": [
-        3529,
-        3674
-      ],
+      "action_name": "Disable touch sensitivity",
+      "description": "It will prevent the screen from becoming overly sensitive when no protector is used.",
+      "category_hint": "auto",
       "step_groups": [
         {
           "steps": [
             {
-              "text": "Check that your device software is up to date.",
+              "text": "Navigate to Settings.",
               "source_span": [
-                3529,
-                3607
+                2235,
+                2255
               ]
             },
             {
-              "text": "Check for updates to any third-party apps you use.",
+              "text": "Tap Display.",
               "source_span": [
-                3608,
-                3674
+                2261,
+                2268
+              ]
+            },
+            {
+              "text": "Tap the switch next to Touch sensitivity to disable it.",
+              "source_span": [
+                2275,
+                2315
               ]
             }
           ]
         }
+      ],
+      "source_span": [
+        2126,
+        2315
       ]
     },
     {
-      "action_name": "Enter Safe Mode",
-      "description": "It will reveal whether an app causes this",
+      "action_name": "Enter safe mode",
+      "description": "It will help identify if third-party apps are causing the issue.",
       "category_hint": "critical",
-      "source_span": [
-        3860,
-        4282
-      ],
       "step_groups": [
         {
           "steps": [
             {
               "text": "Press and hold the Power button and the Volume down button at the same time.",
               "source_span": [
-                3860,
-                3953
+                2515,
+                2592
               ]
             },
             {
-              "text": "Touch and hold Power off.",
+              "text": "Touch and hold Power off, then tap Safe mode.",
               "source_span": [
-                4048,
-                4072
-              ]
-            },
-            {
-              "text": "Tap Safe mode.",
-              "source_span": [
-                4074,
-                4092
-              ]
-            },
-            {
-              "text": "Remove any third-party app installed around the time the issue began.",
-              "source_span": [
-                4113,
-                4194
-              ]
-            },
-            {
-              "text": "Restart the device to exit Safe mode.",
-              "source_span": [
-                4228,
-                4282
+                2685,
+                2731
               ]
             }
           ]
         }
+      ],
+      "source_span": [
+        2425,
+        2855
       ]
     },
     {
-      "action_name": "Perform Factory Data Reset",
-      "description": "It will erase all data and restore defaults",
+      "action_name": "Perform factory reset",
+      "description": "It will erase all data and restore the device to factory settings.",
       "category_hint": "critical",
-      "source_span": [
-        4543,
-        4769
-      ],
       "step_groups": [
         {
           "steps": [
             {
-              "text": "Back up your personal data before you continue.",
-              "source_span": [
-                4543,
-                4605
-              ]
-            },
-            {
               "text": "Navigate to and open Settings.",
               "source_span": [
-                4640,
-                4670
+                3125,
+                3154
               ]
             },
             {
               "text": "Tap General management.",
               "source_span": [
-                4671,
-                4694
+                3155,
+                3177
               ]
             },
             {
               "text": "Tap Reset.",
               "source_span": [
-                4695,
-                4705
+                3178,
+                3188
               ]
             },
             {
               "text": "Tap Factory data reset.",
               "source_span": [
-                4706,
-                4729
+                3189,
+                3212
               ]
             },
             {
               "text": "Swipe to and tap Reset.",
               "source_span": [
-                4730,
-                4753
+                3213,
+                3236
               ]
             },
             {
               "text": "Tap Delete all.",
               "source_span": [
-                4754,
-                4769
+                3237,
+                3251
               ]
             }
           ]
         }
+      ],
+      "source_span": [
+        2955,
+        3355
       ]
     },
     {
-      "action_name": "Contact Samsung Support",
-      "description": "It will connect you with Samsung support staff",
+      "action_name": "Contact support",
+      "description": "It will provide further assistance if the issue persists.",
       "category_hint": "manual",
-      "source_span": [
-        5014,
-        5072
-      ],
       "step_groups": [
         {
           "steps": [
             {
-              "text": "Contact Samsung Support if the issue persists after these steps.",
+              "text": "Reach out to Samsung Support.",
               "source_span": [
-                5014,
-                5072
+                3405,
+                3433
               ]
             }
           ]
         }
+      ],
+      "source_span": [
+        3356,
+        3455
       ]
     }
   ],
   "query_variations": [
-    "Touch response on my Galaxy S22 is delayed and unresponsive.",
-    "my s22 touchscreen is super laggy when i tap stuff",
-    "S22 touch lag delayed input screen",
-    "Why does my Galaxy S22 take so long to register a tap?",
-    "Screen input lag on Galaxy S22 after tapping.",
-    "this phone touch is so slow its driving me insane",
-    "Galaxy S22 touchscreen responds late to every touch.",
-    "my galxy s22 tuch screen is laggy and slow to respnd",
-    "Delayed touch registration on Samsung Galaxy S22 display.",
-    "S22 screen takes a second to react when I press anything."
+    "screen laggy",
+    "touch input delay",
+    "unresponsive screen",
+    "slow touch response",
+    "touchscreen not working properly",
+    "screen delay",
+    "laggy touch",
+    "touch input lag",
+    "screen touch issues",
+    "delayed touch response"
   ]
 }

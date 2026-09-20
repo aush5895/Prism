@@ -44,7 +44,12 @@ TOGGLE_TYPES = {"onURL", "offURL", "updateURL"}  # tier 1 vs tier 2 (contract §
 
 # ---- LLM ----
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini")
-LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.0-flash")
+# gemini-2.0-flash was retired for new API keys (live 404 confirmed 2026-09-21: Google's
+# own error names the replacement). gemini-3.1-flash-lite is the current default: no
+# thinking-token overhead for a deterministic parsing task, cheapest per-token rate,
+# and no transient 503s observed in testing (unlike gemini-3.6-flash, the heavier
+# successor, which is still a valid override via LLM_MODEL).
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.1-flash-lite")
 LLM_TEMPERATURE = 0.0
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"  # never a literal key
 

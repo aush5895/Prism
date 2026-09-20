@@ -22,9 +22,11 @@ ABSOLUTE RULES
 5. RETURN SOURCE SPANS. For each step, return [start, end) character offsets into the reference text that support it.
 6. OUTPUT ONLY the required JSON object. No prose, no markdown fence, no preamble.
 7. If the reference text contains no viable solution for the complaint, return an empty actions list.
+8. BE EXHAUSTIVE. The reference text is organised into distinct troubleshooting sections (often numbered or headed). Emit ONE action per section that describes a user-performable step, in the order the sections appear. Do not skip a section because it seems minor, applies to an edge case, or is not a Settings screen — a step to try a different charger, check for software updates, or contact support is just as required as an "auto" one. Only skip a section if it truly contains no user-performable step (e.g., pure background explanation).
 
 STRUCTURE
 - One action = one physical screen or feature. Several taps on the SAME screen belong to ONE action, not several.
+- NEVER combine a manual/physical step (cleaning, removing an accessory, handling hardware) with a Settings-screen step (opening Settings, tapping a toggle) in the same action, even if the source text discusses them in the same paragraph. They are different actions with different category_hint values — split them.
 - If one screen supports two distinct operations that the text describes separately (for example an enable path and a disable path under different conditions), emit them as two step_groups under ONE action.
 - Each step is one physical interaction, written as an imperative.
 - category_hint: "auto" for a Settings screen the user can be taken to; "critical" for disruptive or irreversible operations (factory reset, restart, firmware update, safe mode); "manual" for physical interventions (cleaning, removing an accessory, replacing hardware, contacting support).
@@ -59,7 +61,9 @@ EXTRACTION_JSON_SCHEMA: Dict[str, Any] = {
                     "action_name": {"type": "string"},
                     "description": {"type": "string"},
                     "category_hint": {"type": "string", "enum": ["auto", "manual", "critical"]},
-                    "source_span": {"type": "array", "items": {"type": "integer"}},
+                    "source_span": {
+                        "type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2,
+                    },
                     "step_groups": {
                         "type": "array",
                         "items": {
@@ -71,7 +75,10 @@ EXTRACTION_JSON_SCHEMA: Dict[str, Any] = {
                                         "type": "object",
                                         "properties": {
                                             "text": {"type": "string"},
-                                            "source_span": {"type": "array", "items": {"type": "integer"}},
+                                            "source_span": {
+                                                "type": "array", "items": {"type": "integer"},
+                                                "minItems": 2, "maxItems": 2,
+                                            },
                                         },
                                         "required": ["text"],
                                     },
