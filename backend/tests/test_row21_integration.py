@@ -79,10 +79,14 @@ def test_goal_and_title_follow_the_required_syntax(goal):
 
 
 def test_score_comes_from_the_formula_not_the_model(goal):
-    # Computed by contract §3.4's formula (span_coverage 0.40 + deeplink_precision 0.30
-    # + evidence_alignment 0.30), not asserted per-term here since the term-by-term mix
-    # changed with the live extraction -- the formula itself is unit-tested elsewhere.
-    assert goal["score"] == pytest.approx(0.82, abs=0.01)
+    """Contract §3.4: span_coverage 0.40 + deeplink_precision 0.30 + alignment 0.30.
+
+    This was 0.82 until span verification landed. It is 0.76 now because span_coverage
+    fell from a fabricated 1.00 to a measured 0.86: the extractor's character offsets
+    were guesses, and the old check accepted any offset that was merely in BOUNDS. The
+    lower number is the honest one. See test_spans.py.
+    """
+    assert goal["score"] == pytest.approx(0.76, abs=0.01)
 
 
 # ----------------------------------------------------------------- grounding

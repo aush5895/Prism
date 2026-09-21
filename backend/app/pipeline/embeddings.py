@@ -36,6 +36,13 @@ class Embedder(abc.ABC):
     name: str = "base"
     dim: int = 0
 
+    #: Does a vector depend on what else is in the corpus?
+    #: False for a transformer: encoding one string gives the same vector whatever else is
+    #: stored, so new keys can be APPENDED to the cache matrix. True for TF-IDF, whose
+    #: vocabulary and IDF weights ARE the corpus, so adding a key invalidates every
+    #: existing row and the matrix has to be rebuilt.
+    corpus_dependent: bool = False
+
     @abc.abstractmethod
     def encode(self, texts: Sequence[str]) -> np.ndarray:
         ...
@@ -72,7 +79,7 @@ class SentenceTransformerEmbedder(Embedder):
         return self._normalise(vectors)
 
 
-class TfidfSvdEmbedder(Embedder):
+class TfidfSvdEmbedder(Embedder):  # noqa: D101 - see below
     """TF-IDF + SVD. Fitted lazily on the first corpus it is given and refitted when the
     corpus has grown enough to change the vocabulary materially.
 
@@ -82,6 +89,7 @@ class TfidfSvdEmbedder(Embedder):
     """
 
     name = "tfidf+svd"
+    corpus_dependent = True   # IDF weights shift as the corpus grows; rows cannot be reused
 
     def __init__(self, n_components: int | None = None):
         from sklearn.decomposition import TruncatedSVD  # type: ignore

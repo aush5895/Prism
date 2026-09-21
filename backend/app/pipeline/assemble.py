@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .. import config
 from ..ir import EnrichedQuery, Evidence, ExtractedAction, Extraction
-from . import ordering, validate
+from . import ordering, spans, validate
 from .deeplinks import DeeplinkCatalog, Resolution
 
 
@@ -29,17 +29,24 @@ class ResolvedAction:
 class PlanDebug:
     """Internal only — never serialised into the graded response (guide §4.2.4)."""
     resolutions: List[Dict[str, Any]] = field(default_factory=list)
+    spans: List[Dict[str, Any]] = field(default_factory=list)
     span_coverage: float = 0.0
     deeplink_precision: float = 0.0
     evidence_alignment: float = 0.0
     checks: List[str] = field(default_factory=list)
 
 
-def _span_is_verified(span: Optional[Tuple[int, int]], evidence_len: int) -> bool:
-    if not span or len(span) != 2:
-        return False
-    start, end = span
-    return 0 <= start < end <= evidence_len
+def _span_is_verified(span: Optional[Tuple[int, int]], step_text: str, evidence: str) -> bool:
+    """Bounds alone is NOT verification.
+
+    This used to be `0 <= start < end <= evidence_len`, which any fabricated offset
+    satisfies -- and measured on the recorded row_21 extraction, every one of the 29
+    model-claimed offsets was fabricated while scoring a perfect 1.00 span_coverage.
+    Since span_coverage is 40% of the confidence score (contract §3.4), the reported
+    confidence was inflated by exactly the amount the model was wrong. A span must now
+    quote text that actually supports its step.
+    """
+    return spans.verifies(span, step_text, evidence)
 
 
 def resolve_actions(extraction: Extraction, catalog: DeeplinkCatalog) -> List[ResolvedAction]:
@@ -68,7 +75,7 @@ def resolve_actions(extraction: Extraction, catalog: DeeplinkCatalog) -> List[Re
     return out
 
 
-def compute_score(resolved: List[ResolvedAction], evidence_len: int, alignment: float) -> Tuple[float, PlanDebug]:
+def compute_score(resolved: List[ResolvedAction], evidence: str, alignment: float) -> Tuple[float, PlanDebug]:
     """Contract §3.4. The model never chooses this number."""
     dbg = PlanDebug(evidence_alignment=alignment)
 
@@ -76,8 +83,11 @@ def compute_score(resolved: List[ResolvedAction], evidence_len: int, alignment: 
     for ra in resolved:
         for group in ra.action.step_groups:
             for step in group.steps:
+                # A step that could not be located stays in the DENOMINATOR and adds
+                # nothing to the numerator. Dropping it from both sides would let a plan
+                # with one traceable step out of thirty report perfect grounding.
                 total_steps += 1
-                verified_steps += int(_span_is_verified(step.source_span, evidence_len))
+                verified_steps += int(_span_is_verified(step.source_span, step.text, evidence))
     dbg.span_coverage = (verified_steps / total_steps) if total_steps else 0.0
 
     auto_groups = [r for ra in resolved if ra.category == "auto" for r in ra.resolutions]
@@ -104,6 +114,10 @@ def build_response(
     catalog: DeeplinkCatalog,
     alignment: float,
 ) -> Tuple[Dict[str, Any], PlanDebug]:
+    # Replace the extractor's claimed offsets with verified ones BEFORE anything scores
+    # or renders them, so the confidence score and the UI read the same trustworthy set.
+    span_by_step = spans.relocate_extraction(extraction, evidence.text)
+
     resolved = resolve_actions(extraction, catalog)
     if not resolved:
         return {"contexts": []}, PlanDebug(evidence_alignment=alignment)
@@ -112,17 +126,25 @@ def build_response(
         [(ra.tier, ra.source_order, ra) for ra in resolved]
     )
 
-    score, dbg = compute_score(resolved, len(evidence.text), alignment)
+    score, dbg = compute_score(resolved, evidence.text, alignment)
 
     actions: List[Dict[str, Any]] = []
-    for ra in ordered:
+    for a_idx, ra in enumerate(ordered):
         groups: List[Dict[str, Any]] = []
-        for group, res in zip(ra.action.step_groups, ra.resolutions):
+        for g_idx, (group, res) in enumerate(zip(ra.action.step_groups, ra.resolutions)):
             groups.append({
                 "steps": [validate.scrub_urls(s.text) for s in group.steps],
                 "actionableDeeplink": res.deeplink,
                 "validationDeeplink": res.validation,
             })
+            # Re-key the span records to the EMITTED position. The extraction is in
+            # article order and this loop is in tier order, so positional records from
+            # the extraction would label the wrong step.
+            for s_idx, step in enumerate(group.steps):
+                record = span_by_step.get(id(step))
+                if record is not None:
+                    dbg.spans.append({"action_index": a_idx, "group_index": g_idx,
+                                      "step_index": s_idx, **record})
             dbg.resolutions.append({
                 "action": ra.action.action_name,
                 "decision": res.decision,

@@ -85,7 +85,44 @@ held-out split, so the experiment is cheap to run when there is time to run it p
   deliberately does not read. Those cases are scored against the whole equivalence class
   because no resolver could do better from the step alone.
 
-### 2.2 The gold set
+### 2.2 Source spans are relocated by content matching, not trusted from the model
+
+`span_coverage` is 40% of the confidence score (contract §3.4), and it is the number
+behind the claim that a plan is grounded in the supplied article. It is now computed from
+spans the pipeline **locates and verifies**, not from the offsets the extractor reports.
+
+**Why.** The extractor returns a `[start, end)` character offset for every step, and those
+offsets are guesses. Measured on the recorded row_21 extraction, **0 of 29 model-claimed
+spans quoted text with any meaningful overlap with their own step**. Counting characters
+is not something a language model does reliably.
+
+That was not merely cosmetic. The check behind `span_coverage` tested only that an offset
+was in **bounds**, and `[0, 12)` is in bounds for every article ever supplied. Fabricated
+spans therefore scored a perfect 1.00 and the reported confidence was inflated by exactly
+the amount the model was wrong. The suite stayed green the whole time, because nothing
+asserted that a span quoted text having anything to do with its step — that test
+(`test_an_in_bounds_span_over_unrelated_text_is_not_verified`) is the one that was missing.
+
+**How it works now.** `app/pipeline/spans.py` relocates each step by content-token overlap
+over the article's own sentences, scores the model's claim the same way, and keeps
+whichever genuinely supports the step, preferring the tightest window on a tie. A step
+that cannot be located anywhere gets **no span**: it stays in the `span_coverage`
+denominator and contributes nothing to the numerator. Dropping it from both sides would
+let a plan with one traceable step out of thirty report perfect grounding.
+
+**What it cost, and that is the point.** On row_21 `span_coverage` fell from a fabricated
+**1.00 to a measured 0.862**, and the plan's confidence score fell from **0.82 to 0.76**.
+The score formula was not reweighted to compensate. The lower number is the honest one.
+
+**What remains weak.** Relocation is lexical: it matches a step to a sentence by shared
+content tokens, so a step that paraphrases its source with genuinely different vocabulary
+will not be located and will count against coverage even though it is properly grounded.
+Steps made entirely of UI verbs and stopwords ("Open Settings.") have no subject
+vocabulary to match on and are never counted as verified — on row_21 that is 4 of 29
+steps. Both failures are in the safe direction: they understate grounding rather than
+overstate it.
+
+### 2.3 The gold set
 
 - **It is derived from the catalog, not human-labelled.** It measures whether the resolver
   can recover the entry a step was phrased from. It does not measure whether a real
@@ -96,7 +133,7 @@ held-out split, so the experiment is cheap to run when there is time to run it p
   a setting, it falls back to reading the whole step and the gate is weaker than 99.2%
   suggests.
 
-### 2.3 The semantic cache
+### 2.4 The semantic cache
 
 - **Measured on 20 rows carrying only 11 distinct articles.** Six rows share one article.
   Hits are scored against the article equivalence class, so a hit on a sibling row with
@@ -111,16 +148,19 @@ held-out split, so the experiment is cheap to run when there is time to run it p
   within-article mismatch that 11 articles cannot exercise.
 - **Held-out paraphrases come from the same extractor that wrote the seeds**, so they are
   more consistent in register than real user traffic would be.
-- **The reported fast-path p95 does not include re-encode cost, and production would.**
-  Adding keys marks the L1 matrix dirty, and the next lookup re-encodes *every* stored
-  key rather than appending the new rows. The evaluation seeds once and then probes, so it
-  never pays that cost; a live session interleaves stores and lookups and does. Observed
-  in the running service: an L1 hit immediately after a store took **254 ms** against the
-  ~8 ms the harness reports, on only 23 keys. It is still inside the 300 ms budget here,
-  but it scales with the size of the whole store, so it will not stay inside it. The fix
-  is to append new rows to the matrix instead of rebuilding it — a transformer embedding
-  is corpus-independent, so appending is exactly equivalent and O(new keys). Not done,
-  because the cache was frozen before the frontend work began.
+- **The fast-path p95 now includes re-encode cost (FIXED).** Adding keys used to mark the
+  L1 matrix dirty, so the next lookup re-encoded *every* stored key and ran linear in the
+  size of the whole store. The published figure came from a seed-then-probe benchmark that
+  never writes between reads; a live service writes on every cold miss. Measured
+  store-then-hit before the fix: **76.9 ms at 102 keys, 155.0 ms at 192, 463.8 ms at 552,
+  1086.8 ms at 1272** — past the 300 ms budget well before 552 keys, which is only ~55
+  cold queries. New rows are now appended instead, which is exact rather than approximate
+  for a corpus-independent embedder, and a test asserts the appended matrix equals a full
+  rebuild. After: **18.7 / 17.0 / 17.8 / 19.6 ms** at the same four sizes — flat. The
+  harness now reports the interleaved path as its own row in `docs/metrics.md` §4:
+  **29.5 ms p50, 32.8 ms p95 at 359 keys**. TF-IDF declares
+  itself corpus-dependent and is still rebuilt, because its IDF weights shift as the
+  corpus grows.
 - **The slot guard's domain test is unstable across paraphrases.** `enrich._domain` picks
   the domain by argmax over keyword counts and breaks ties on lexicon order, so rewording
   a complaint can flip `performance` to `display` and turn a legitimate hit into a guard
@@ -129,7 +169,7 @@ held-out split, so the experiment is cheap to run when there is time to run it p
   `display`, and the second was refused the first's cached plan. This is part of the 4
   points of hit rate the guard costs.
 
-### 2.4 Extraction
+### 2.5 Extraction
 
 - **The live model does not reliably merge same-screen polarities.** The prompt asks for an
   enable path and a disable path to become two `step_groups` under one action;
@@ -141,7 +181,7 @@ held-out split, so the experiment is cheap to run when there is time to run it p
   too vague to action and omitted it. That is a defensible reading, but it is the model's
   judgement, not a rule the pipeline enforces.
 
-### 2.5 Operational
+### 2.6 Operational
 
 - **Cost is an estimate** from published per-token rates, not a billed figure.
 - **Gemini's free tier allows 15 `generate_content` calls per minute.** A 20-row live

@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 from typing import Any, Dict
 
 from contextlib import asynccontextmanager
@@ -24,7 +23,6 @@ from .pipeline import assemble, ground, validate
 from .pipeline.cache import evidence_key, get_cache
 from .pipeline.deeplinks import get_catalog
 from .pipeline.enrich import enrich
-from .text import content, tokens
 from .telemetry import METRICS, StageTimer
 
 log = logging.getLogger("prism")
@@ -176,7 +174,10 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
         debug_sink["score_terms"] = {"span_coverage": dbg.span_coverage,
                                      "deeplink_precision": dbg.deeplink_precision,
                                      "evidence_alignment": dbg.evidence_alignment}
-        debug_sink["spans"] = _spans_for(extraction, response, evidence.text)
+        # Spans come from the pipeline now: assemble.build_response relocates and
+        # verifies them before scoring, so the UI and the confidence score read the
+        # same set rather than two independent guesses.
+        debug_sink["spans"] = dbg.spans
 
     variations = list(extraction.query_variations)[: config.VARIATIONS_MAX]
     usage = provider.last_usage()
@@ -192,105 +193,6 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
                                        model=meta.model, evidence=evidence_id)
 
     return _finish(req, variations, response, meta, timer)
-
-
-_SEGMENT = re.compile(r"[^.!?\n]+[.!?]?")
-
-
-def _segments(evidence: str) -> list:
-    """Sentence-ish spans of the article, with their real offsets."""
-    return [(m.start(), m.end()) for m in _SEGMENT.finditer(evidence) if m.group().strip()]
-
-
-def _score_span(step_text: str, evidence: str, start: int, end: int) -> float:
-    """How much of the STEP's subject vocabulary the quoted region actually contains."""
-    subject = set(content(step_text))
-    if not subject:
-        return 0.0
-    quoted = set(tokens(evidence[start:end]))
-    return sum(1 for t in subject if t in quoted) / len(subject)
-
-
-def _locate_span(step_text: str, evidence: str, claimed) -> tuple:
-    """Find where a step is ACTUALLY supported in the article, and say how we know.
-
-    The model's self-reported character offsets cannot be trusted: measured on the
-    recorded row_21 extraction, 0 of 29 claimed spans quoted text with any meaningful
-    overlap with their own step. Character counting is not something a language model
-    does reliably, and the only span test in the suite checks bounds rather than content,
-    so the claim went unchallenged.
-
-    So the claim is VERIFIED rather than believed. Each step is relocated by content-token
-    overlap over the article's own sentences, the model's claim is scored the same way,
-    and whichever genuinely supports the step wins. A step that cannot be located anywhere
-    is returned with no span, because an honest blank beats a confident highlight over
-    unrelated text -- and this panel exists to show the plan is grounded.
-    """
-    # Rank by (score, tightness): among windows that support the step equally well, the
-    # shortest one is the most informative highlight. Without the tightness term a
-    # two-sentence window starting one sentence early keeps the position on a tie.
-    best = (0.0, 0, None, None)
-    segments = _segments(evidence)
-    for i, (start, _end) in enumerate(segments):
-        for j in range(i, min(i + 2, len(segments))):     # 1- and 2-sentence windows
-            window_start, window_end = start, segments[j][1]
-            score = _score_span(step_text, evidence, window_start, window_end)
-            candidate = (score, -(window_end - window_start), window_start, window_end)
-            if candidate > best:
-                best = candidate
-    best = (best[0], best[2], best[3])
-
-    claim_score = 0.0
-    if claimed and len(claimed) == 2 and claimed[0] is not None:
-        c0, c1 = int(claimed[0]), int(claimed[1])
-        if 0 <= c0 < c1 <= len(evidence):
-            claim_score = _score_span(step_text, evidence, c0, c1)
-            if claim_score >= best[0] and claim_score >= 0.5:
-                return c0, c1, "model", round(claim_score, 3)
-
-    if best[0] >= 0.5:
-        return best[1], best[2], "located", round(best[0], 3)
-    return None, None, "unlocated", round(max(best[0], claim_score), 3)
-
-
-def _spans_for(extraction, response: Dict[str, Any], evidence: str = "") -> list:
-    """Map every EMITTED step back to its source span in the article.
-
-    The emitted plan is in tier order while the extraction is in article order, and the
-    graded response carries no spans (it must not -- the schema has no field for them).
-    The reconstruction is positional and exact: `assemble.build_response` zips an action's
-    stepGroups with its resolutions without reordering either, so within a matched action
-    group j and step k line up. Actions are matched on the Title-Cased name the emitter
-    produces, consumed from a queue so two actions sharing a name cannot cross over.
-    """
-    from collections import defaultdict, deque
-
-    pending = defaultdict(deque)
-    for action in extraction.actions:
-        pending[validate.repair_action_name(action.action_name)].append(action)
-
-    out = []
-    for context in response.get("contexts", []):
-        for a_idx, action in enumerate(context.get("actions", [])):
-            queue = pending.get(action["actionName"])
-            source = queue.popleft() if queue else None
-            for g_idx, group in enumerate(action.get("stepGroups", [])):
-                ir_group = (source.step_groups[g_idx]
-                            if source and g_idx < len(source.step_groups) else None)
-                for s_idx, _text in enumerate(group.get("steps", [])):
-                    step = (ir_group.steps[s_idx]
-                            if ir_group and s_idx < len(ir_group.steps) else None)
-                    claimed = getattr(step, "source_span", None) if step else None
-                    start, end, provenance, confidence = _locate_span(
-                        _text, evidence, claimed)
-                    out.append({
-                        "action_index": a_idx, "group_index": g_idx, "step_index": s_idx,
-                        "start": start, "end": end,
-                        "claimed_start": claimed[0] if claimed else None,
-                        "claimed_end": claimed[1] if claimed else None,
-                        "provenance": provenance, "confidence": confidence,
-                    })
-    return out
 
 
 def _finish(req, variations, response, meta: Meta, timer: StageTimer) -> TroubleshootEnvelope:

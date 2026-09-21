@@ -294,6 +294,80 @@ def test_cache_can_be_disabled_entirely():
     assert run_pipeline(request, provider=provider, use_cache=False).meta.cache_hit is False
 
 
+# ----------------------------------------------------------------- incremental matrix
+def test_appending_a_key_gives_the_same_matrix_as_rebuilding():
+    """The L1 matrix appends new rows instead of re-encoding every key.
+
+    That is only legitimate because a transformer embedding is corpus-independent, so the
+    appended matrix must be bit-for-bit what a full rebuild would produce. If this drifts,
+    the cache is silently comparing against stale vectors.
+    """
+    incremental = SemanticCache(embedder=FakeEmbedder(), similarity_min=0.9)
+    for i, text in enumerate(["screen touch lag", "battery drain fast", "camera blurry"]):
+        incremental.store(enrich(f"Galaxy S22 {text}"), _plan(), [text])
+        incremental.lookup(enrich("Galaxy S22 screen"))      # forces an encode each time
+
+    rebuilt = SemanticCache(embedder=FakeEmbedder(), similarity_min=0.9)
+    for text in ["screen touch lag", "battery drain fast", "camera blurry"]:
+        rebuilt.store(enrich(f"Galaxy S22 {text}"), _plan(), [text])
+    rebuilt.lookup(enrich("Galaxy S22 screen"))              # one encode at the end
+
+    assert incremental._keys == rebuilt._keys
+    assert np.allclose(incremental._ensure_matrix(), rebuilt._ensure_matrix())
+
+
+def test_only_the_new_keys_are_encoded_after_a_store():
+    """The property that makes store-then-hit constant time instead of linear in the
+    whole store. Measured before the change: 1086.8 ms at 1272 keys; after: 19.6 ms."""
+    class CountingEmbedder(FakeEmbedder):
+        def __init__(self):
+            self.encoded = []
+
+        def encode(self, texts):
+            self.encoded.append(len(texts))
+            return super().encode(texts)
+
+    embedder = CountingEmbedder()
+    cache = SemanticCache(embedder=embedder, similarity_min=0.9)
+    cache.store(enrich("Galaxy S22 screen touch lag"), _plan(), [f"seed {i}" for i in range(9)])
+    cache.lookup(enrich("Galaxy S22 screen"))
+    embedder.encoded.clear()
+
+    cache.store(enrich("Galaxy S22 battery drain"), _plan(), ["one more key"])
+    cache.lookup(enrich("Galaxy S22 screen"))
+
+    key_encodes = [n for n in embedder.encoded if n > 1]
+    assert key_encodes, "expected the new keys to be encoded"
+    assert max(key_encodes) <= 3, f"re-encoded the whole store: {embedder.encoded}"
+
+
+def test_a_corpus_dependent_embedder_still_rebuilds():
+    """TF-IDF's IDF weights shift as the corpus grows, so its existing rows go stale and
+    appending would be wrong. It must declare that and be rebuilt."""
+    from app.pipeline.embeddings import TfidfSvdEmbedder
+
+    assert TfidfSvdEmbedder.corpus_dependent is True
+    assert FakeEmbedder.corpus_dependent is False
+
+    cache = SemanticCache(embedder=TfidfSvdEmbedder(), similarity_min=0.1)
+    cache.store(enrich("Galaxy S22 screen touch lag"), _plan(), ["screen lag"])
+    cache.lookup(enrich("Galaxy S22 screen"))
+    cache.store(enrich("Galaxy S22 battery drain"), _plan(), ["battery drain"])
+    matrix = cache._ensure_matrix()
+    assert matrix.shape[0] == len(cache._keys), "every key must be present after a rebuild"
+
+
+def test_eviction_rebuilds_rather_than_appending():
+    """Eviction drops rows from the FRONT, so the append offset stops lining up."""
+    cache = SemanticCache(embedder=FakeEmbedder(), similarity_min=0.9, max_entries=4)
+    for i in range(4):
+        cache.store(enrich(f"Galaxy S2{i} screen issue {i}"), _plan(), [f"key {i} screen"])
+        cache.lookup(enrich("Galaxy S20 screen"))
+    assert len(cache._keys) <= 4
+    matrix = cache._ensure_matrix()
+    assert matrix.shape[0] == len(cache._keys)
+
+
 # ----------------------------------------------------------------- backend selection
 def test_an_embedding_backend_is_available_and_normalised():
     """Whichever backend this machine resolves to, vectors must be unit length or cosine

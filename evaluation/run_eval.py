@@ -570,6 +570,53 @@ def _fast_path_latency(plans: Sequence[Dict[str, Any]], threshold: float) -> Dic
     }
 
 
+def _interleaved_latency(plans: Sequence[Dict[str, Any]], threshold: float) -> Dict[str, Any]:
+    """Lookup latency on the path a LIVE service actually takes: store, then look up.
+
+    The seed-then-probe protocol above never writes between reads, so it never pays for
+    bringing the L1 matrix up to date. Production writes on every cold miss. This measures
+    a lookup issued immediately after a store, which is where the wholesale re-encode used
+    to show up (76.9 ms at 102 keys, 463.8 ms at 552, 1086.8 ms at 1272 -- linear in the
+    whole store, and past the 300 ms budget well before 552).
+    """
+    cache = SemanticCache(similarity_min=threshold)
+    _seed_cache(cache, plans)
+    # The probe must be a HELD-OUT paraphrase that actually reaches L1. The row's own
+    # canonical query short-circuits at L0 and never touches the matrix, which is exactly
+    # the cost being measured; and not every held-out paraphrase clears the threshold, so
+    # scan for one that does rather than assuming the first does.
+    probe = probe_evidence = None
+    for row in plans:
+        row_evidence = evidence_key(row["siis_response"])
+        for text in row["variations"][CACHE_SEED_VARIATIONS:]:
+            candidate = enrich(text)
+            if cache.lookup(candidate, evidence=row_evidence).tier == "L1":
+                probe, probe_evidence = candidate, row_evidence
+                break
+        if probe is not None:
+            break
+    if probe is None:
+        return {"samples": 0, "keys_at_end": len(cache), "p50_ms": 0.0, "p95_ms": 0.0,
+                "note": "no held-out paraphrase reached L1; nothing to measure"}
+
+    samples: List[float] = []
+    for i, plan in enumerate(plans):
+        # a fresh plan arrives and is stored, exactly as a cold miss would store it
+        cache.store(enrich(f"synthetic interleaved complaint {i} {plan['query'][:40]}"),
+                    plan["response"], [f"interleaved variation {i} {j}" for j in range(9)],
+                    evidence=evidence_key(plan["siis_response"]))
+        started = time.perf_counter()
+        cache.lookup(probe, evidence=probe_evidence)
+        samples.append((time.perf_counter() - started) * 1000.0)
+
+    return {
+        "samples": len(samples),
+        "keys_at_end": len(cache),
+        "p50_ms": _percentile(samples, 0.50),
+        "p95_ms": _percentile(samples, 0.95),
+    }
+
+
 def run_cache_eval(plans: Sequence[Dict[str, Any]], cold_latencies: Sequence[float]
                    ) -> Dict[str, Any]:
     """Seed / probe split, threshold sweep, and the two numbers Samsung grades."""
@@ -608,6 +655,7 @@ def run_cache_eval(plans: Sequence[Dict[str, Any]], cold_latencies: Sequence[flo
 
     shipped = holdout_results[f"{config.CACHE_SIMILARITY_MIN}"]
     latency = _fast_path_latency(ordered, config.CACHE_SIMILARITY_MIN)
+    interleaved = _interleaved_latency(ordered, config.CACHE_SIMILARITY_MIN)
 
     # What the slot guard is worth, measured rather than asserted.
     unguarded_cache = SemanticCache(similarity_min=config.CACHE_SIMILARITY_MIN,
@@ -668,6 +716,7 @@ def run_cache_eval(plans: Sequence[Dict[str, Any]], cold_latencies: Sequence[flo
         "holdout_shipped": shipped,
         "unguarded_holdout": unguarded,
         "latency": latency,
+        "interleaved_latency": interleaved,
         "cold_p50_ms": _percentile(cold_latencies, 0.50),
         "cold_p95_ms": _percentile(cold_latencies, 0.95),
         "llm_calls_avoided": shipped["hits"],
@@ -675,7 +724,8 @@ def run_cache_eval(plans: Sequence[Dict[str, Any]], cold_latencies: Sequence[flo
         "target_hit_rate_pct": CACHE_TARGET_HIT_RATE,
         "target_p95_ms": CACHE_TARGET_P95_MS,
         "meets_hit_rate_target": shipped["hit_rate_pct"] >= CACHE_TARGET_HIT_RATE,
-        "meets_latency_target": latency["all_hits_p95_ms"] <= CACHE_TARGET_P95_MS,
+        "meets_latency_target": max(latency["all_hits_p95_ms"],
+                                   interleaved["p95_ms"]) <= CACHE_TARGET_P95_MS,
         "meets_zero_false_positives": shipped["false_positives"] == 0,
     }
 
@@ -883,8 +933,18 @@ def render_metrics(report: Dict[str, Any]) -> str:
             f"{cache['target_p95_ms']} ms |")
         add(f"| All hits | {lat['all_hits_p50_ms']} ms | {lat['all_hits_p95_ms']} ms | "
             f"{cache['target_p95_ms']} ms |")
+        add(f"| Hit straight after a store (live path) | "
+            f"{cache['interleaved_latency']['p50_ms']} ms | "
+            f"{cache['interleaved_latency']['p95_ms']} ms | {cache['target_p95_ms']} ms |")
         add(f"| Cold miss (full pipeline) | {cache['cold_p50_ms']} ms | "
             f"{cache['cold_p95_ms']} ms | n/a |")
+        add("")
+        add("The last row is the one to read. Seed-then-probe never writes between reads, "
+            "so it never pays to bring the L1 matrix up to date; a live service writes on "
+            "every cold miss. That path used to re-encode the whole store on the next "
+            "lookup and ran linear in its size -- 76.9 ms at 102 keys, 463.8 ms at 552, "
+            "1086.8 ms at 1272. New rows are now appended, which is exact for a "
+            "corpus-independent embedder, and the cost is flat.")
         add("")
         verdicts = [
             f"hit rate {'MET' if cache['meets_hit_rate_target'] else 'NOT MET'}",

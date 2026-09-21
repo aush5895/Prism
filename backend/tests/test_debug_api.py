@@ -15,7 +15,8 @@ from fastapi.testclient import TestClient
 
 from app.contracts import TroubleshootRequest
 from app.llm.replay import ReplayProvider
-from app.main import _locate_span, app, run_pipeline
+from app.main import app, run_pipeline
+from app.pipeline.spans import locate
 from app.schema_samsung import ContextDeeplinkResponse
 from app.text import content, tokens
 
@@ -119,10 +120,14 @@ def test_located_spans_actually_support_their_step(debug_run):
 
 
 def test_a_wrong_model_span_is_relocated_not_trusted():
-    """A claimed offset that quotes unrelated text must lose to the real location."""
+    """A claimed offset that quotes unrelated text must lose to the real location.
+
+    Relocation now happens in the PIPELINE (app/pipeline/spans.py), not only on the debug
+    path, because span_coverage is scored from it. See test_spans.py for the full set.
+    """
     evidence = ("Touchscreen issues. If your screen protector is peeling, please remove it. "
                 "A damaged charger might not supply enough power.")
-    start, end, provenance, _confidence = _locate_span(
+    start, end, provenance, _confidence = locate(
         "Remove the peeling screen protector.", evidence, (0, 12))
     assert provenance == "located"
     assert "protector" in evidence[start:end]
@@ -131,7 +136,7 @@ def test_a_wrong_model_span_is_relocated_not_trusted():
 def test_a_step_that_cannot_be_located_returns_no_span():
     """An honest blank beats a confident highlight over unrelated text."""
     evidence = "Touchscreen issues. Go to Settings and tap Display."
-    start, end, provenance, _confidence = _locate_span(
+    start, end, provenance, _confidence = locate(
         "Replace the refrigerator water filter cartridge.", evidence, None)
     assert start is None and end is None
     assert provenance == "unlocated"
