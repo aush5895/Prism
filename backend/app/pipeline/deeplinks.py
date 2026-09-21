@@ -18,7 +18,7 @@ import yaml
 from rank_bm25 import BM25Okapi
 
 from .. import config
-from ..text import content, contains_any, coverage, tokens, word_count
+from ..text import content, contains_any, coverage, subject_of, tokens, word_count
 
 # ---------------------------------------------------------------- intent parsing
 _OFF = re.compile(r"\b(turn(?:ing)? off|switch(?:ing)? off|disable|deactivate|toggle off|uncheck)\b", re.I)
@@ -66,8 +66,13 @@ _TAP_TARGET = re.compile(
 
 
 def parse_intent(step: str) -> str:
-    """Polarity/type intent of a step. Order matters: OFF before ON ('turn off' contains
-    neither 'on' as a word nor 'enable', but 'switch on'/'switch off' overlap)."""
+    """Polarity/type intent of a step, read from the whole string. Order matters: OFF
+    before ON ('turn off' contains neither 'on' as a word nor 'enable', but
+    'switch on'/'switch off' overlap).
+
+    This is the FALLBACK reading. Prefer `intent_for_candidate` during resolution: a
+    setting whose own name contains a polarity phrase hijacks this one. See below.
+    """
     if _OFF.search(step):
         return "OFF"
     if _ON.search(step):
@@ -75,6 +80,38 @@ def parse_intent(step: str) -> str:
     if _UPDATE.search(step) and not _NAV.search(step):
         return "UPDATE"
     return "VIEW"
+
+
+def intent_for_candidate(step: str, candidate_message: str) -> str:
+    """Polarity intent of `step` with the candidate's OWN NAME subtracted first.
+
+    REGRESSION this exists for. Nine catalog entries have a polarity phrase inside the
+    setting name itself — 'Enable Double tap to turn off screen', 'Enable Turn on now'.
+    Reading polarity from the whole step lets the NAME outvote the INSTRUCTION, and the
+    failure is directional rather than merely wrong:
+
+        "Turn on Double tap to turn off screen."
+          whole-step read -> OFF (the name's 'turn off' matches first)
+          resolves to     -> Disable Double tap to turn off screen
+
+    The user asked to enable and was sent to disable. Subtracting the candidate's subject
+    leaves only the instruction wording ('Turn on   .'), which reads ON correctly.
+
+    Taking the LAST polarity marker instead would fix the example above and break the
+    mirror case "Turn on Double tap to turn off screen." in the other direction, since the
+    name's marker is last there. Only removing the name is direction-safe.
+
+    Falls back to the whole-step reading when subtraction leaves nothing to read, which is
+    also what happens in production when an article paraphrases a setting rather than
+    naming it verbatim.
+    """
+    subject = subject_of(candidate_message)
+    if not subject:
+        return parse_intent(step)
+    stripped = re.sub(re.escape(subject), " ", step, flags=re.IGNORECASE)
+    if not stripped.strip(" .,;:"):
+        return parse_intent(step)
+    return parse_intent(stripped)
 
 
 # ---------------------------------------------------------------- lexicons
@@ -93,6 +130,9 @@ class CandidateTrace:
     bm25: float
     coverage: float
     verdict: str  # eligible | reject:polarity | reject:scope(q) | reject:concept | reject:margin
+    # Intent is per candidate, so a polarity rejection is only readable alongside the
+    # intent that produced it. Two candidates can read the same step differently.
+    intent: str = "VIEW"
 
 
 @dataclass
@@ -164,8 +204,6 @@ class DeeplinkCatalog:
         """`gates` exists for the ablation harness only; it defaults to every gate and no
         caller in backend/app passes anything else."""
         active = GATES_ALL if gates is None else gates
-        intent = parse_intent(step)
-        allowed = ALLOWED_TYPES[intent]
         qualifiers = self._lex["scope_qualifiers"]
 
         scores = self._bm25.get_scores(tokens(step))
@@ -173,18 +211,22 @@ class DeeplinkCatalog:
         peak = max((scores[i] for i in top), default=0.0) or 1.0
 
         trace: List[CandidateTrace] = []
-        survivors: List[tuple[float, Dict[str, Any]]] = []
+        survivors: List[tuple[float, Dict[str, Any], str]] = []
 
         for i in top:
             e = self.entries[i]
             norm = scores[i] / peak
             cov = coverage(e["message"], step)
+            # Intent is read PER CANDIDATE, with that candidate's own name subtracted
+            # from the step first — see intent_for_candidate. A step has no single
+            # polarity until you say which setting you are asking about.
+            intent = intent_for_candidate(step, e["message"])
 
             # The placeholder is never selected BY RETRIEVAL under any gate configuration:
             # it is the fallback the resolver authors, not a candidate it can match.
             if e["deeplink"] == config.DUMMY_DEEPLINK:
                 verdict = "reject:placeholder"
-            elif GATE_POLARITY in active and e["originalType"] not in allowed:
+            elif GATE_POLARITY in active and e["originalType"] not in ALLOWED_TYPES[intent]:
                 verdict = "reject:polarity"             # gate [2]
             else:
                 hit = (contains_any(self._scope_blob(e), qualifiers)
@@ -195,9 +237,9 @@ class DeeplinkCatalog:
                     verdict = "reject:concept"          # gate [4]
                 else:
                     verdict = "eligible"
-                    survivors.append((norm, e))
+                    survivors.append((norm, e, intent))
             trace.append(CandidateTrace(e["id"], e["message"], e["originalType"], round(norm, 4),
-                                        round(cov, 4), verdict))
+                                        round(cov, 4), verdict, intent))
 
         if not survivors:
             return Resolution("none", "no_candidate_survived_gates", trace=trace)
@@ -211,7 +253,7 @@ class DeeplinkCatalog:
                         t.verdict = "reject:margin"
                 return Resolution("none", f"margin_{gap:.3f}_below_{config.MARGIN_DELTA}", trace=trace)
 
-        entry = survivors[0][1]
+        entry, intent = survivors[0][1], survivors[0][2]
         emitted = self._emit(entry)
         self.verify_identity(emitted)  # gate [6]
         return Resolution("exact", f"intent={intent}", emitted,

@@ -42,18 +42,19 @@ from functools import lru_cache
 from typing import Dict, FrozenSet, List, Tuple
 
 from app import config
-from app.text import content
+from app.text import CATALOG_LEADING_VERBS, content, subject_of
 
 # Types a step can actually be phrased for. `null` (11) and `placeholder` (1) are excluded:
 # the placeholder is the resolver's own fallback and the null-typed rows are status
 # readouts, not screens a troubleshooting step navigates to.
 RESOLVABLE_TYPES = ("onURL", "offURL", "onClickURL", "updateURL")
 
-# Every verb the catalog opens a `message` with, measured over the supplied data.
-# A generated step may never lead with one of these — see property 2 above.
-CATALOG_LEADING_VERBS = frozenset(
-    {"view", "enable", "disable", "adjust", "check", "increase", "switch", "optimize"}
-)
+# subject_of and CATALOG_LEADING_VERBS are re-exported from app.text deliberately: gate
+# [2] subtracts a candidate's subject from a step using the same function that phrases a
+# step from an entry here. If the two ever diverged, the gold set would stop describing
+# the resolver under test.
+__all__ = ["Case", "RESOLVABLE_TYPES", "CATALOG_LEADING_VERBS", "subject_of",
+           "build_cases", "duplicate_message_stats", "ambiguous_pairs", "stats"]
 
 # Two phrasings per subject, in the register the supplied articles use.
 TEMPLATES: Dict[str, Tuple[str, str]] = {
@@ -82,14 +83,6 @@ class Case:
 
 def _load_entries() -> List[dict]:
     return json.loads(config.DEEPLINKS_PATH.read_text())["deeplinks"]
-
-
-def subject_of(message: str) -> str:
-    """The catalog message minus its leading verb. 'Enable Auto-Sync' -> 'Auto-Sync'."""
-    parts = (message or "").split()
-    if parts and parts[0].lower() in CATALOG_LEADING_VERBS:
-        parts = parts[1:]
-    return " ".join(parts).strip()
 
 
 @lru_cache(maxsize=1)

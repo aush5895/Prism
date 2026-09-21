@@ -94,7 +94,7 @@ contract is wrong, say so and stop; do not act on it unilaterally.
 ## 5. Current state and what is next
 
 **Done:** Phase 0 · D1 backend vertical slice · D2 evaluation harness and gate ablation ·
-D3a live Gemini. **87 tests green, no skips.**
+D3a live Gemini. **95 tests green, no skips.**
 
 **Measured** (`python -m evaluation.run_eval --provider gemini --rate-limit-rpm 12`,
 regenerates `evaluation/report.json` + `docs/metrics.md`; every figure below comes from
@@ -104,15 +104,15 @@ that report, none is typed by hand):
 |---|---|
 | Extraction provider | `gemini:gemini-3.1-flash-lite` |
 | Gold set | 850 labelled steps over 425 catalog equivalence classes |
-| accuracy@1 | 89.4% |
-| Wrong deeplinks | 1.2% |
-| Abstained (degrades to `dummy_positive`) | 9.4% |
-| Precision | 98.7% |
-| Gate ablation, V0 → V4 | wrong 31.6% → 1.2%, precision 68.4% → 98.7% |
+| accuracy@1 | 90.1% |
+| Wrong deeplinks | 0.7% |
+| Abstained (degrades to `dummy_positive`) | 9.2% |
+| Precision | 99.2% |
+| Gate ablation, V0 → V4 | wrong 31.6% → 0.7%, precision 68.4% → 99.2% |
 | Schema-valid / rule-compliant, 20 rows | 100% / 100% |
 | URL leaks / catalog-invalid deeplinks | 0 / 0 |
 | Rows producing a plan | 20 / 20 |
-| Latency p50 / p95 (live provider) | 3217 ms / 4727 ms |
+| Latency p50 / p95 (live provider) | 3676 ms / 7944 ms |
 | Cost, 20 rows | $0.034 |
 
 Notes on the numbers, so they are not over-read:
@@ -122,16 +122,24 @@ Notes on the numbers, so they are not over-read:
 - The ablation **cannot measure gate [3] (scope)**: V1 and V2 are identical, because
   every generated step carries its own entry's qualifier by construction. The gate's
   value is shown by the production regression test, not by the ablation.
-- `MARGIN_DELTA` stays at **0.08**: a seeded fit half preferred 0.06, but on the held-out
-  half that is worth 2 more correct answers and 2 more wrong ones — inside the declared
-  5-case materiality bar, and 0.08 has the lower wrong rate.
+- `MARGIN_DELTA` stays at **0.08**: a seeded fit half preferred 0.02, but on the held-out
+  half that buys 7 correct answers at the cost of 3 more wrong ones. The declared rule
+  refuses any change that increases wrong deeplinks, whatever it gains.
 
-**Known open bug, not yet fixed:** `parse_intent` scans the whole step for polarity, so a
-setting whose own NAME contains "turn on"/"turn off" hijacks the read. "Tap the switch
-next to Double tap to turn off screen **to enable it**." parses as OFF and resolves to the
-disable entry. 8 catalog entries have such subjects; this accounts for 4 of the 10 wrong
-resolutions in the current report. Fix belongs with the resolver, measured by re-running
-the harness.
+**Fixed since D2:** `.env` was never loaded (nothing imported dotenv, so a configured
+key was invisible and `--provider gemini` failed unless exported by hand); and gate [2]
+read polarity from the whole step, so a setting whose own NAME contains "turn on"/"turn
+off" outvoted the instruction and sent an enable request to the disable entry. Intent is
+now parsed per candidate with that candidate's subject subtracted first. Wrong deeplinks
+fell 1.2% → 0.7%, precision 98.7% → 99.2%.
+
+**Next lead, not yet actioned.** All 6 remaining wrong answers share one shape: a
+candidate whose content tokens are a SUBSET of the step's scores coverage 1.0 with no
+penalty for failing to explain the rest of the step. "Charging Feedback" loses to
+"Charging"; "Relumino outline" loses to "Relumino outline shortcut"; "Double tap to turn
+on screen" loses to the "turn off" sibling because `content()` collapses both to
+`{double}`. A length-aware or bidirectional coverage term is the obvious next experiment,
+and the harness can now measure it.
 
 **Remaining, in strict order. Do not start one before the previous is green:**
 
@@ -140,7 +148,7 @@ the harness.
 | D3b | **Semantic cache.** Two tiers: exact-hash L0, embedding-similarity L1 seeded with the 8–10 `query_variations`. Precision over recall — a hit must clear the similarity threshold **and** a device/domain slot guard; guard failure means full pipeline. Log similarity and source query for every hit. | Samsung grades this explicitly: <300 ms fast path, ≥80% paraphrase hit rate. Required, currently absent. |
 | D3c | **Repair/retry loop.** Validation failure → one targeted repair → revalidate → `no_match` if still failing. Cap at 2 attempts. | Contract §3.3. Currently fails closed with no retry. |
 | D4a | **Frontend** (React + Vite). Not a chat window — it must *visualise the intelligence*: enrichment slots, the source article with matched steps highlighted by their character spans, and the resolver's accepted vs rejected candidates side by side. | Judges need to see *why* `Enable Touch sensitivity` won and `Disable` was rejected. |
-| D4b | **Dense retrieval leg**, only if it beats the current lexical floor on the ablation. Ship it or drop it on the measurement — do not assume it helps. | Floor to beat: 89.4% accuracy@1 / 98.7% precision. |
+| D4b | **Dense retrieval leg**, only if it beats the current lexical floor on the ablation. Ship it or drop it on the measurement — do not assume it helps. | Floor to beat: 90.1% accuracy@1 / 99.2% precision. |
 | D5 | Demo script, video, PPT, `LIMITATIONS.md`, clean-container reproducibility check, release tag. | Submission requirements. |
 
 Cut order if time runs short: D4b → D4a polish → D3c. **Never cut:** schema validity, zero
@@ -151,7 +159,7 @@ URL leaks, catalog integrity, the cache fast path, a reproducible README.
 ## 6. Commands
 
 ```bash
-python -m pytest                  # 87 tests, no API key needed
+python -m pytest                  # 95 tests, no API key needed
 python -m evaluation.run_eval     # regenerate report.json + metrics.md (offline stub)
 python -m evaluation.run_eval --provider gemini --rate-limit-rpm 12   # live numbers
 python -m tools.demo_row21        # row_21 plan + resolver accept/reject trace

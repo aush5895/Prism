@@ -1,4 +1,5 @@
 # Core service
+python-dotenv>=1.0     # config.py loads the repo-root .env before reading any os.getenv
 fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.7

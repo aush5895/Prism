@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-09-20T21:23:12Z",
+  "generated_at_utc": "2026-09-21T10:27:59Z",
   "provider_requested": "gemini",
   "catalog": {
     "n_entries": 578,
@@ -112,9 +112,9 @@
     "auto_step_groups": 12,
     "auto_step_groups_with_deeplink": 9,
     "auto_step_groups_with_deeplink_pct": 75.0,
-    "latency_p50_ms": 3216.8,
-    "latency_p95_ms": 4726.7,
-    "latency_mean_ms": 3652.3,
+    "latency_p50_ms": 3675.7,
+    "latency_p95_ms": 7944.2,
+    "latency_mean_ms": 4236.3,
     "total_cost_usd": 0.03447,
     "per_row": [
       {
@@ -130,7 +130,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 4726.7
+        "latency_ms": 7965.7
       },
       {
         "id": "row_2",
@@ -145,7 +145,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 4029.7
+        "latency_ms": 6415.6
       },
       {
         "id": "row_3",
@@ -160,7 +160,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 3343.3
+        "latency_ms": 3765.9
       },
       {
         "id": "row_4",
@@ -175,7 +175,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 4238.2
+        "latency_ms": 5207.2
       },
       {
         "id": "row_5",
@@ -190,7 +190,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 2632.4
+        "latency_ms": 3243.6
       },
       {
         "id": "row_7",
@@ -205,7 +205,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 2049.5
+        "latency_ms": 2447.9
       },
       {
         "id": "row_8",
@@ -220,7 +220,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 2532.2
+        "latency_ms": 2485.5
       },
       {
         "id": "row_9",
@@ -235,7 +235,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 2824.0
+        "latency_ms": 2786.3
       },
       {
         "id": "row_10",
@@ -250,7 +250,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 1739.7
+        "latency_ms": 2021.0
       },
       {
         "id": "row_11",
@@ -265,7 +265,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 2956.9
+        "latency_ms": 3048.4
       },
       {
         "id": "row_12",
@@ -280,7 +280,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 1988.5
+        "latency_ms": 2253.0
       },
       {
         "id": "row_13",
@@ -295,7 +295,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 4193.3
+        "latency_ms": 7944.2
       },
       {
         "id": "row_14",
@@ -310,7 +310,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 2423.0
+        "latency_ms": 3023.2
       },
       {
         "id": "row_15",
@@ -325,7 +325,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 4533.5
+        "latency_ms": 4587.1
       },
       {
         "id": "row_16",
@@ -340,7 +340,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 4265.0
+        "latency_ms": 4514.7
       },
       {
         "id": "row_17",
@@ -355,7 +355,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 3090.3
+        "latency_ms": 3585.5
       },
       {
         "id": "row_19",
@@ -370,7 +370,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 2546.6
+        "latency_ms": 2678.4
       },
       {
         "id": "row_20",
@@ -385,7 +385,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 4473.1
+        "latency_ms": 5402.2
       },
       {
         "id": "row_21",
@@ -400,7 +400,7 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 9861.5
+        "latency_ms": 7466.7
       },
       {
         "id": "row_22",
@@ -415,19 +415,19 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 4598.8
+        "latency_ms": 3884.8
       }
     ]
   },
   "resolution": {
     "n_cases": 850,
-    "correct": 760,
-    "wrong": 10,
-    "abstained": 80,
-    "accuracy_at_1_pct": 89.4,
-    "wrong_pct": 1.2,
-    "abstained_pct": 9.4,
-    "precision_pct": 98.7,
+    "correct": 766,
+    "wrong": 6,
+    "abstained": 78,
+    "accuracy_at_1_pct": 90.1,
+    "wrong_pct": 0.7,
+    "abstained_pct": 9.2,
+    "precision_pct": 99.2,
     "wrong_examples": [
       {
         "step": "Tap the switch next to Charging Feedback to disable it.",
@@ -463,28 +463,6 @@
         "got_type": "offURL"
       },
       {
-        "step": "Tap the switch next to Double tap to turn off screen to enable it.",
-        "gold_ids": [
-          "DL-0091"
-        ],
-        "gold_message": "Enable Double tap to turn off screen",
-        "gold_type": "onURL",
-        "got_id": "DL-0090",
-        "got_message": "Disable Double tap to turn off screen",
-        "got_type": "offURL"
-      },
-      {
-        "step": "Turn on Double tap to turn off screen.",
-        "gold_ids": [
-          "DL-0091"
-        ],
-        "gold_message": "Enable Double tap to turn off screen",
-        "gold_type": "onURL",
-        "got_id": "DL-0090",
-        "got_message": "Disable Double tap to turn off screen",
-        "got_type": "offURL"
-      },
-      {
         "step": "Turn on Double tap to turn on screen.",
         "gold_ids": [
           "DL-0089"
@@ -496,26 +474,26 @@
         "got_type": "onURL"
       },
       {
-        "step": "Tap the switch next to Palm touch to turn off screen to enable it.",
+        "step": "Tap Relumino outline.",
         "gold_ids": [
-          "DL-0189"
+          "DL-0284"
         ],
-        "gold_message": "Enable Palm touch to turn off screen",
-        "gold_type": "onURL",
-        "got_id": "DL-0188",
-        "got_message": "Disable Palm touch to turn off screen",
-        "got_type": "offURL"
+        "gold_message": "View Relumino outline",
+        "gold_type": "onClickURL",
+        "got_id": "DL-0071",
+        "got_message": "View Relumino outline shortcut",
+        "got_type": "onClickURL"
       },
       {
-        "step": "Turn on Palm touch to turn off screen.",
+        "step": "Navigate to and open Relumino outline.",
         "gold_ids": [
-          "DL-0189"
+          "DL-0284"
         ],
-        "gold_message": "Enable Palm touch to turn off screen",
-        "gold_type": "onURL",
-        "got_id": "DL-0188",
-        "got_message": "Disable Palm touch to turn off screen",
-        "got_type": "offURL"
+        "gold_message": "View Relumino outline",
+        "gold_type": "onClickURL",
+        "got_id": "DL-0071",
+        "got_message": "View Relumino outline shortcut",
+        "got_type": "onClickURL"
       }
     ]
   },
@@ -536,49 +514,49 @@
       "stage": "V1",
       "gates": "+ polarity",
       "n_cases": 850,
-      "correct": 709,
-      "wrong": 141,
+      "correct": 715,
+      "wrong": 135,
       "abstained": 0,
-      "accuracy_at_1_pct": 83.4,
-      "wrong_pct": 16.6,
+      "accuracy_at_1_pct": 84.1,
+      "wrong_pct": 15.9,
       "abstained_pct": 0.0,
-      "precision_pct": 83.4
+      "precision_pct": 84.1
     },
     {
       "stage": "V2",
       "gates": "+ scope",
       "n_cases": 850,
-      "correct": 709,
-      "wrong": 141,
+      "correct": 715,
+      "wrong": 135,
       "abstained": 0,
-      "accuracy_at_1_pct": 83.4,
-      "wrong_pct": 16.6,
+      "accuracy_at_1_pct": 84.1,
+      "wrong_pct": 15.9,
       "abstained_pct": 0.0,
-      "precision_pct": 83.4
+      "precision_pct": 84.1
     },
     {
       "stage": "V3",
       "gates": "+ target concept",
       "n_cases": 850,
-      "correct": 823,
-      "wrong": 23,
-      "abstained": 4,
-      "accuracy_at_1_pct": 96.8,
-      "wrong_pct": 2.7,
-      "abstained_pct": 0.5,
-      "precision_pct": 97.3
+      "correct": 829,
+      "wrong": 19,
+      "abstained": 2,
+      "accuracy_at_1_pct": 97.5,
+      "wrong_pct": 2.2,
+      "abstained_pct": 0.2,
+      "precision_pct": 97.8
     },
     {
       "stage": "V4",
       "gates": "+ margin (shipped)",
       "n_cases": 850,
-      "correct": 760,
-      "wrong": 10,
-      "abstained": 80,
-      "accuracy_at_1_pct": 89.4,
-      "wrong_pct": 1.2,
-      "abstained_pct": 9.4,
-      "precision_pct": 98.7
+      "correct": 766,
+      "wrong": 6,
+      "abstained": 78,
+      "accuracy_at_1_pct": 90.1,
+      "wrong_pct": 0.7,
+      "abstained_pct": 9.2,
+      "precision_pct": 99.2
     }
   ],
   "margin_sweep": {
@@ -589,135 +567,135 @@
     "precision_floor_pct": 98.0,
     "materiality_bar_cases": 5,
     "shipped_margin_delta": 0.08,
-    "selected_margin_delta": 0.06,
+    "selected_margin_delta": 0.02,
     "selection_met_floor": true,
-    "holdout_gained_correct": 2,
-    "holdout_extra_wrong": 2,
+    "holdout_gained_correct": 7,
+    "holdout_extra_wrong": 3,
     "recommend_change": false,
-    "verdict": "\u03b4 = 0.06 is worth only 2 more correct answers on the held-out half and produces +2 wrong ones, inside the 5-case materiality bar. The shipped \u03b4 = 0.08 also yields the lower wrong rate (0.7% against 1.2%), which is the error this project weights hardest. Keep \u03b4 = 0.08.",
+    "verdict": "\u03b4 = 0.02 is not adopted because it produces 3 more wrong deeplinks on the held-out half (1.2% against 0.5%), and a wrong deeplink is the error this project weights hardest. Keep \u03b4 = 0.08.",
     "fit_sweep": [
       {
         "margin_delta": 0.0,
         "n_cases": 425,
-        "correct": 408,
-        "wrong": 15,
+        "correct": 411,
+        "wrong": 12,
         "abstained": 2,
-        "accuracy_at_1_pct": 96.0,
-        "wrong_pct": 3.5,
+        "accuracy_at_1_pct": 96.7,
+        "wrong_pct": 2.8,
         "abstained_pct": 0.5,
-        "precision_pct": 96.5
+        "precision_pct": 97.2
       },
       {
         "margin_delta": 0.01,
         "n_cases": 425,
-        "correct": 395,
-        "wrong": 12,
+        "correct": 398,
+        "wrong": 9,
         "abstained": 18,
-        "accuracy_at_1_pct": 92.9,
-        "wrong_pct": 2.8,
+        "accuracy_at_1_pct": 93.6,
+        "wrong_pct": 2.1,
         "abstained_pct": 4.2,
-        "precision_pct": 97.1
+        "precision_pct": 97.8
       },
       {
         "margin_delta": 0.02,
         "n_cases": 425,
-        "correct": 390,
-        "wrong": 10,
+        "correct": 393,
+        "wrong": 7,
         "abstained": 25,
-        "accuracy_at_1_pct": 91.8,
-        "wrong_pct": 2.4,
+        "accuracy_at_1_pct": 92.5,
+        "wrong_pct": 1.6,
         "abstained_pct": 5.9,
-        "precision_pct": 97.5
+        "precision_pct": 98.2
       },
       {
         "margin_delta": 0.03,
         "n_cases": 425,
-        "correct": 385,
-        "wrong": 10,
+        "correct": 388,
+        "wrong": 7,
         "abstained": 30,
-        "accuracy_at_1_pct": 90.6,
-        "wrong_pct": 2.4,
+        "accuracy_at_1_pct": 91.3,
+        "wrong_pct": 1.6,
         "abstained_pct": 7.1,
-        "precision_pct": 97.5
+        "precision_pct": 98.2
       },
       {
         "margin_delta": 0.04,
         "n_cases": 425,
-        "correct": 383,
-        "wrong": 10,
+        "correct": 386,
+        "wrong": 7,
         "abstained": 32,
-        "accuracy_at_1_pct": 90.1,
-        "wrong_pct": 2.4,
+        "accuracy_at_1_pct": 90.8,
+        "wrong_pct": 1.6,
         "abstained_pct": 7.5,
-        "precision_pct": 97.5
+        "precision_pct": 98.2
       },
       {
         "margin_delta": 0.06,
         "n_cases": 425,
-        "correct": 377,
-        "wrong": 7,
+        "correct": 380,
+        "wrong": 4,
         "abstained": 41,
-        "accuracy_at_1_pct": 88.7,
-        "wrong_pct": 1.6,
+        "accuracy_at_1_pct": 89.4,
+        "wrong_pct": 0.9,
         "abstained_pct": 9.6,
-        "precision_pct": 98.2
+        "precision_pct": 99.0
       },
       {
         "margin_delta": 0.08,
         "n_cases": 425,
-        "correct": 372,
-        "wrong": 7,
+        "correct": 375,
+        "wrong": 4,
         "abstained": 46,
-        "accuracy_at_1_pct": 87.5,
-        "wrong_pct": 1.6,
+        "accuracy_at_1_pct": 88.2,
+        "wrong_pct": 0.9,
         "abstained_pct": 10.8,
-        "precision_pct": 98.2
+        "precision_pct": 98.9
       },
       {
         "margin_delta": 0.12,
         "n_cases": 425,
-        "correct": 366,
-        "wrong": 7,
+        "correct": 369,
+        "wrong": 4,
         "abstained": 52,
-        "accuracy_at_1_pct": 86.1,
-        "wrong_pct": 1.6,
+        "accuracy_at_1_pct": 86.8,
+        "wrong_pct": 0.9,
         "abstained_pct": 12.2,
-        "precision_pct": 98.1
+        "precision_pct": 98.9
       },
       {
         "margin_delta": 0.16,
         "n_cases": 425,
-        "correct": 357,
-        "wrong": 4,
+        "correct": 360,
+        "wrong": 1,
         "abstained": 64,
-        "accuracy_at_1_pct": 84.0,
-        "wrong_pct": 0.9,
+        "accuracy_at_1_pct": 84.7,
+        "wrong_pct": 0.2,
         "abstained_pct": 15.1,
-        "precision_pct": 98.9
+        "precision_pct": 99.7
       }
     ],
     "holdout": {
-      "0.06": {
-        "margin_delta": 0.06,
+      "0.02": {
+        "margin_delta": 0.02,
         "n_cases": 425,
-        "correct": 390,
+        "correct": 398,
         "wrong": 5,
-        "abstained": 30,
-        "accuracy_at_1_pct": 91.8,
+        "abstained": 22,
+        "accuracy_at_1_pct": 93.6,
         "wrong_pct": 1.2,
-        "abstained_pct": 7.1,
-        "precision_pct": 98.7
+        "abstained_pct": 5.2,
+        "precision_pct": 98.8
       },
       "0.08": {
         "margin_delta": 0.08,
         "n_cases": 425,
-        "correct": 388,
-        "wrong": 3,
-        "abstained": 34,
-        "accuracy_at_1_pct": 91.3,
-        "wrong_pct": 0.7,
-        "abstained_pct": 8.0,
-        "precision_pct": 99.2
+        "correct": 391,
+        "wrong": 2,
+        "abstained": 32,
+        "accuracy_at_1_pct": 92.0,
+        "wrong_pct": 0.5,
+        "abstained_pct": 7.5,
+        "precision_pct": 99.5
       }
     }
   },
@@ -727,13 +705,13 @@
         "message"
       ],
       "n_cases": 850,
-      "correct": 760,
-      "wrong": 10,
-      "abstained": 80,
-      "accuracy_at_1_pct": 89.4,
-      "wrong_pct": 1.2,
-      "abstained_pct": 9.4,
-      "precision_pct": 98.7
+      "correct": 766,
+      "wrong": 6,
+      "abstained": 78,
+      "accuracy_at_1_pct": 90.1,
+      "wrong_pct": 0.7,
+      "abstained_pct": 9.2,
+      "precision_pct": 99.2
     },
     "message_and_description_previous": {
       "scope_fields": [
@@ -741,13 +719,13 @@
         "description"
       ],
       "n_cases": 850,
-      "correct": 711,
-      "wrong": 16,
-      "abstained": 123,
-      "accuracy_at_1_pct": 83.6,
-      "wrong_pct": 1.9,
-      "abstained_pct": 14.5,
-      "precision_pct": 97.8
+      "correct": 717,
+      "wrong": 12,
+      "abstained": 121,
+      "accuracy_at_1_pct": 84.4,
+      "wrong_pct": 1.4,
+      "abstained_pct": 14.2,
+      "precision_pct": 98.4
     }
   },
   "cache": {
@@ -756,5 +734,5 @@
     "paraphrase_hit_rate_pct": null,
     "fast_path_p95_ms": null
   },
-  "wall_clock_s": 119.3
+  "wall_clock_s": 126.9
 }

@@ -68,6 +68,29 @@ def content(s: str | None) -> List[str]:
     return [t for t in tokens(s) if t not in _NOISE]
 
 
+# The complete set of verbs the catalog opens a `message` with, measured over the 578
+# supplied entries: View 243, Enable 140, Disable 137, Adjust 30, Check 9, Increase 5,
+# Switch 1, Optimize 1. Every one is a UI verb except `optimize`, so this is UI_VERBS
+# plus that single outlier rather than a second independent policy.
+CATALOG_LEADING_VERBS: Set[str] = {
+    "view", "enable", "disable", "adjust", "check", "increase", "switch", "optimize",
+}
+
+
+def subject_of(message: str) -> str:
+    """A catalog message minus its leading verb: 'Enable Auto-Sync' -> 'Auto-Sync'.
+
+    This is what the entry is ABOUT, with the instruction verb removed. Used by gate [2]
+    to subtract a candidate's own name from a step before reading the step's polarity,
+    and by the evaluation gold set to phrase a step from an entry. Both must strip
+    identically or the measurement stops describing the resolver.
+    """
+    parts = (message or "").split()
+    if parts and parts[0].lower() in CATALOG_LEADING_VERBS:
+        parts = parts[1:]
+    return " ".join(parts).strip()
+
+
 def coverage(candidate_message: str, step_text: str) -> float:
     """Fraction of the CANDIDATE's own subject present in the step. See module docstring.
 

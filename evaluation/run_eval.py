@@ -331,13 +331,19 @@ def run_margin_sweep(cases: Sequence[synthetic.Case]) -> Dict[str, Any]:
                      f"the held-out half with {abs(extra_wrong)} fewer wrong, both beyond "
                      f"the {MATERIAL_DELTA_CASES}-case materiality bar. Change.")
     else:
-        rationale = (
-            f"δ = {selected_delta} is worth only {gained_correct} more correct answers on "
-            f"the held-out half and produces {extra_wrong:+d} wrong ones, inside the "
-            f"{MATERIAL_DELTA_CASES}-case materiality bar. The shipped δ = {shipped_delta} "
-            f"also yields the lower wrong rate ({shipped_row['wrong_pct']}% against "
-            f"{selected_row['wrong_pct']}%), which is the error this project weights "
-            f"hardest. Keep δ = {shipped_delta}.")
+        # Name the condition that actually bound, rather than asserting both.
+        reasons = []
+        if gained_correct <= MATERIAL_DELTA_CASES:
+            reasons.append(
+                f"it is worth only {gained_correct} more correct answers on the held-out "
+                f"half, inside the {MATERIAL_DELTA_CASES}-case materiality bar")
+        if extra_wrong > 0:
+            reasons.append(
+                f"it produces {extra_wrong} more wrong deeplinks on the held-out half "
+                f"({selected_row['wrong_pct']}% against {shipped_row['wrong_pct']}%), and a "
+                f"wrong deeplink is the error this project weights hardest")
+        rationale = (f"δ = {selected_delta} is not adopted because "
+                     + "; and ".join(reasons) + f". Keep δ = {shipped_delta}.")
 
     return {
         "seed": SPLIT_SEED,
@@ -601,7 +607,12 @@ def render_metrics(report: Dict[str, Any]) -> str:
     add("- **The gold set is derived, not human-labelled.** It is generated from the "
         "catalog's own `message` strings, so it measures whether the resolver can recover "
         "the entry a step was phrased from. It does not measure whether a real article's "
-        "wording would reach the right entry.")
+        "wording would reach the right entry. One consequence is specific enough to name: "
+        "gate [2] reads polarity after subtracting the candidate's own subject from the "
+        "step, and in this gold set that subject is always present verbatim, so the "
+        "subtraction always succeeds. On a real article that paraphrases a setting rather "
+        "than naming it, the subtraction falls back to reading the whole step, and the "
+        "gate is correspondingly weaker than these numbers suggest.")
     add(f"- **{dup['classes_with_duplicates']} message classes are not separable at all.** "
         f"`{dup['largest_classes'][0]['message']}` covers "
         f"{dup['largest_classes'][0]['n']} different screens, distinguishable only by "

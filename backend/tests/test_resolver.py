@@ -8,7 +8,7 @@ import pytest
 from app import config
 from app.ir import ExtractedAction, ExtractedStep, ExtractedStepGroup, Extraction
 from app.pipeline import assemble, ordering
-from app.pipeline.deeplinks import parse_intent
+from app.pipeline.deeplinks import intent_for_candidate, parse_intent
 from app.text import coverage
 
 
@@ -33,6 +33,51 @@ def _action(name: str, steps: list[str], hint: str | None = None) -> ExtractedAc
 ])
 def test_intent_parsing(step, intent):
     assert parse_intent(step) == intent
+
+
+# ------------------------------------------------- gate [2] per-candidate intent
+@pytest.mark.parametrize("step,candidate_message,intent", [
+    # REGRESSION: the setting's own NAME contains a polarity phrase and used to outvote
+    # the instruction. Both of these read OFF from the whole step before the fix, so
+    # "enable" resolved to the Disable entry — the user asked to turn something on and
+    # was sent to turn it off.
+    ("Tap the switch next to Double tap to turn off screen to enable it.",
+     "Enable Double tap to turn off screen", "ON"),
+    ("Turn on Double tap to turn off screen.",
+     "Enable Double tap to turn off screen", "ON"),
+    # The mirror case. Taking the LAST polarity marker instead of removing the candidate's
+    # name would fix the two above and break this one, which is why it is here.
+    ("Turn off Double tap to turn on screen.",
+     "Disable Double tap to turn on screen", "OFF"),
+    # Ordinary wording must be unaffected.
+    ("Tap the switch next to Touch sensitivity to disable it.",
+     "Disable Touch sensitivity", "OFF"),
+    ("Tap Navigation bar.", "View Navigation bar", "VIEW"),
+    # The subject is ENTIRELY a polarity phrase; subtracting it must still leave the
+    # instruction readable.
+    ("Turn on Turn on now.", "Enable Turn on now", "ON"),
+])
+def test_intent_is_read_per_candidate_with_its_own_name_removed(step, candidate_message, intent):
+    assert intent_for_candidate(step, candidate_message) == intent
+
+
+def test_polarity_hijack_resolved_to_the_opposite_polarity_before_the_fix(catalog):
+    """The end-to-end consequence, not just the parse: these must reach the ENABLE entry."""
+    for step in ("Turn on Double tap to turn off screen.",
+                 "Tap the switch next to Double tap to turn off screen to enable it."):
+        res = catalog.resolve_step(step)
+        assert res.is_exact, step
+        assert res.deeplink["originalType"] == "onURL", step
+        assert res.deeplink["message"].startswith("Enable"), step
+
+
+def test_whole_step_parse_intent_survives_for_the_fallback_path(catalog):
+    """parse_intent stays the module-level fallback, used when a candidate's subject is
+    not present in the step to subtract."""
+    assert parse_intent("Tap the switch next to Touch sensitivity to enable it.") == "ON"
+    # a candidate whose name shares nothing with the step falls back to the whole-step read
+    assert intent_for_candidate("Tap the switch next to Touch sensitivity to enable it.",
+                                "View Navigation bar") == "ON"
 
 
 def test_polarity_gate_separates_enable_from_disable(catalog):

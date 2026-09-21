@@ -9,6 +9,22 @@ import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Load the repo-root .env BEFORE any os.getenv below. Without this, nothing reads .env at
+# all: every value here came from the real process environment, so a configured
+# GEMINI_API_KEY sitting in .env was invisible and `--provider gemini` failed with "not
+# set" unless the operator had exported it by hand.
+#
+# override=False so a real environment variable still wins over the file — CI and
+# container runs set variables directly and must not be overridden by a stray local .env.
+# The file stays gitignored; only .env.example is committed.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(REPO_ROOT / ".env", override=False)
+except ImportError:  # pragma: no cover - dotenv absent, environment-only operation
+    pass
+
 DATA_DIR = Path(os.getenv("PRISM_DATA_DIR", REPO_ROOT / "data"))
 LEXICON_DIR = DATA_DIR / "lexicons"
 
