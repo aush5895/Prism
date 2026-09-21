@@ -1,18 +1,20 @@
+# Default: normalise to LF in the repository, let Git decide in the working tree.
+# This must come FIRST -- in gitattributes the LAST matching rule wins, so the overrides
+# below would be silently ignored if the wildcard were listed after them.
+* text=auto
+
 # Samsung's supplied kit is checksummed BYTE FOR BYTE and must never be translated.
 #
 # Without this, Git for Windows' default core.autocrlf=true rewrites LF to CRLF on
-# checkout, and a fresh clone fails its own immutability test: data/schema.py becomes 67
+# checkout and a fresh clone fails its own immutability test: data/schema.py becomes 67
 # CRLFs instead of 67 LFs and its SHA-256 changes from 649440e0...6ebf6b to
-# 833e54d2...069406. Caught by a clean-clone check, not by the working tree, because the
-# working tree still held the original bytes.
+# 833e54d2...069406. The working tree never showed it, because the working tree still
+# held the bytes that were committed; only a clean clone does.
 #
-# -text disables all end-of-line conversion in both directions.
+# -text disables end-of-line conversion in both directions.
 data/** -text
 backend/app/schema_samsung.py -text
 
-# Everything else: normalise to LF in the repository, let Git decide in the working tree.
-* text=auto
-
-# Generated artefacts that should not be diffed or merged by hand.
+# Generated artefacts: do not try to diff or merge these by hand.
 evaluation/report.json -diff
 frontend/package-lock.json -diff
