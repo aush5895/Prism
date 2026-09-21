@@ -78,5 +78,13 @@ LLM_TEMPERATURE = 0.0
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"  # never a literal key
 
 # ---- cache (contract §7 stage 8): precision over recall ----
-CACHE_SIMILARITY_MIN = float(os.getenv("PRISM_CACHE_SIMILARITY_MIN", "0.92"))
+# Threshold fitted on a seeded half of the supplied rows and reported on the held-out
+# half by evaluation/run_eval.py, under a rule declared before the split: zero false
+# positives first, hit rate second. See docs/metrics.md §4.
+CACHE_SIMILARITY_MIN = float(os.getenv("PRISM_CACHE_SIMILARITY_MIN", "0.60"))
 CACHE_SLOT_GUARD = True
+CACHE_ENABLED = os.getenv("PRISM_CACHE_ENABLED", "1") not in ("0", "false", "False")
+CACHE_MAX_ENTRIES = int(os.getenv("PRISM_CACHE_MAX_ENTRIES", "5000"))
+CACHE_HIT_LOG_MAX = int(os.getenv("PRISM_CACHE_HIT_LOG_MAX", "1000"))
+CACHE_EMBED_MODEL = os.getenv("PRISM_CACHE_EMBED_MODEL", "all-MiniLM-L6-v2")
+CACHE_TFIDF_COMPONENTS = int(os.getenv("PRISM_CACHE_TFIDF_COMPONENTS", "128"))

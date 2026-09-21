@@ -10,6 +10,19 @@ sys.path.insert(0, str(ROOT / "backend"))
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+@pytest.fixture(autouse=True)
+def isolate_semantic_cache():
+    """The cache is process-global by design — sharing plans across requests is the whole
+    point in production. In a test session that makes it shared mutable state: one test's
+    stored plan can answer another test's query and silently change what is under test.
+    Every test therefore starts cold.
+    """
+    from app.pipeline.cache import reset_cache
+    reset_cache()
+    yield
+    reset_cache()
+
+
 @pytest.fixture(scope="session")
 def repo_root() -> Path:
     return ROOT

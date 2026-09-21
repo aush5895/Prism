@@ -94,7 +94,7 @@ contract is wrong, say so and stop; do not act on it unilaterally.
 ## 5. Current state and what is next
 
 **Done:** Phase 0 · D1 backend vertical slice · D2 evaluation harness and gate ablation ·
-D3a live Gemini. **95 tests green, no skips.**
+D3a live Gemini · D3b semantic cache. **118 tests green, no skips.**
 
 **Measured** (`python -m evaluation.run_eval --provider gemini --rate-limit-rpm 12`,
 regenerates `evaluation/report.json` + `docs/metrics.md`; every figure below comes from
@@ -112,8 +112,11 @@ that report, none is typed by hand):
 | Schema-valid / rule-compliant, 20 rows | 100% / 100% |
 | URL leaks / catalog-invalid deeplinks | 0 / 0 |
 | Rows producing a plan | 20 / 20 |
-| Latency p50 / p95 (live provider) | 3676 ms / 7944 ms |
+| Latency p50 / p95 (live provider, cold) | 4814 ms / 7724 ms |
 | Cost, 20 rows | $0.034 |
+| Cache hit rate, held-out paraphrases | 82.0% (target >= 80%) |
+| Cache cross-article false positives | 0.0% (target 0%) |
+| Cache fast path p95 | 81.8 ms (target <= 300 ms) |
 
 Notes on the numbers, so they are not over-read:
 - The gold set is **derived from the catalog**, not human-labelled. Gold is an
@@ -125,6 +128,23 @@ Notes on the numbers, so they are not over-read:
 - `MARGIN_DELTA` stays at **0.08**: a seeded fit half preferred 0.02, but on the held-out
   half that buys 7 correct answers at the cost of 3 more wrong ones. The declared rule
   refuses any change that increases wrong deeplinks, whatever it gains.
+
+Cache notes, so they are not over-read:
+- The cache key is **(query, article)**, not the query alone. `siis_response` arrives with
+  the request, so the plan is a function of both. Keyed on the query alone the held-out
+  cross-row error rate was 22% and no threshold from 0.40 to 0.90 fixed it: five supplied
+  rows are black-screen complaints with different articles, and "how to fix black screen"
+  contains nothing that separates them.
+- The 20 rows carry only **11 distinct articles**; six share one. Hits are scored against
+  the article equivalence class, so a hit on a sibling row with the same article is
+  reported separately rather than counted as a falsehood.
+- The similarity threshold stays at **0.60** although the fit half preferred 0.40. Every
+  threshold in the sweep shows zero cross-article false positives, so the sweep measures
+  the evidence key, not the threshold. 0.60 is a deliberate safety margin for the
+  within-article mismatch the corpus cannot exercise.
+- The **slot guard prevents nothing measurable here** and costs 4 points of hit rate,
+  for the same reason gate [3] shows no ablation delta: the corpus does not contain the
+  case it exists for.
 
 **Fixed since D2:** `.env` was never loaded (nothing imported dotenv, so a configured
 key was invisible and `--provider gemini` failed unless exported by hand); and gate [2]
@@ -145,7 +165,6 @@ and the harness can now measure it.
 
 | # | Task | Why it matters |
 |---|---|---|
-| D3b | **Semantic cache.** Two tiers: exact-hash L0, embedding-similarity L1 seeded with the 8–10 `query_variations`. Precision over recall — a hit must clear the similarity threshold **and** a device/domain slot guard; guard failure means full pipeline. Log similarity and source query for every hit. | Samsung grades this explicitly: <300 ms fast path, ≥80% paraphrase hit rate. Required, currently absent. |
 | D3c | **Repair/retry loop.** Validation failure → one targeted repair → revalidate → `no_match` if still failing. Cap at 2 attempts. | Contract §3.3. Currently fails closed with no retry. |
 | D4a | **Frontend** (React + Vite). Not a chat window — it must *visualise the intelligence*: enrichment slots, the source article with matched steps highlighted by their character spans, and the resolver's accepted vs rejected candidates side by side. | Judges need to see *why* `Enable Touch sensitivity` won and `Disable` was rejected. |
 | D4b | **Dense retrieval leg**, only if it beats the current lexical floor on the ablation. Ship it or drop it on the measurement — do not assume it helps. | Floor to beat: 90.1% accuracy@1 / 99.2% precision. |
@@ -159,7 +178,7 @@ URL leaks, catalog integrity, the cache fast path, a reproducible README.
 ## 6. Commands
 
 ```bash
-python -m pytest                  # 95 tests, no API key needed
+python -m pytest                  # 118 tests, no API key needed
 python -m evaluation.run_eval     # regenerate report.json + metrics.md (offline stub)
 python -m evaluation.run_eval --provider gemini --rate-limit-rpm 12   # live numbers
 python -m tools.demo_row21        # row_21 plan + resolver accept/reject trace

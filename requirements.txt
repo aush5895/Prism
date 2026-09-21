@@ -9,6 +9,12 @@ PyYAML>=6.0
 # so an ANN index would be a dependency and a Docker layer bought for nothing.
 rank-bm25>=0.2.2
 
+# L1 semantic cache (contract section 7 stage 8). sentence-transformers is preferred;
+# embeddings.py falls back to scikit-learn TF-IDF+SVD when the model cannot be
+# downloaded, and the evaluation report always names which backend produced its numbers.
+sentence-transformers>=3.0
+scikit-learn>=1.3
+
 # Tests
 pytest>=8.0
 httpx>=0.27

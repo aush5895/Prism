@@ -17,6 +17,7 @@ from .contracts import (FALLBACK_NO_MATCH, FALLBACK_NO_SIIS_CONTEXT,
                         TroubleshootRequest)
 from .llm import get_provider
 from .pipeline import assemble, ground, validate
+from .pipeline.cache import evidence_key, get_cache
 from .pipeline.deeplinks import get_catalog
 from .pipeline.enrich import enrich
 from .telemetry import METRICS, StageTimer
@@ -33,6 +34,13 @@ async def lifespan(_app: FastAPI):
     also means cold-start cost is paid at boot, not inside the first request's latency."""
     get_catalog()
     ground._reference_corpus()  # noqa: SLF001 - warm the fallback index at boot
+    if config.CACHE_ENABLED:
+        # Guide §5 requires /health 200 only once caching is initialised, and loading an
+        # embedding model inside the first request would land on that request's latency.
+        try:
+            get_cache().embedder
+        except Exception as exc:  # pragma: no cover - cache is optional, never fatal
+            log.warning("cache embedder unavailable (%s); running without the fast path", exc)
     try:
         _state["provider"] = get_provider()
     except Exception as exc:  # no key configured, or provider package missing
@@ -56,18 +64,36 @@ def health() -> JSONResponse:
 @app.get("/metrics")
 def metrics() -> Dict[str, Any]:
     """Not part of Samsung's contract. Operational telemetry only."""
-    return METRICS.snapshot()
+    snapshot = METRICS.snapshot()
+    if config.CACHE_ENABLED:
+        snapshot["cache"] = get_cache().snapshot()
+    return snapshot
 
 
-def run_pipeline(req: TroubleshootRequest, provider=None) -> TroubleshootEnvelope:
+def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None = None
+                 ) -> TroubleshootEnvelope:
     """The vertical slice, end to end. Importable so tests never need a running server."""
     timer = StageTimer()
     provider = provider or _state.get("provider") or get_provider("stub")
     catalog = get_catalog()
     meta = Meta(model=f"{provider.name}:{provider.model}")
+    caching = config.CACHE_ENABLED if use_cache is None else use_cache
 
     with timer.stage("enrich"):
         enriched = enrich(req.query)
+
+    # Stage 8 fast path (contract §7). Before grounding and before the LLM: a hit answers
+    # from an already-VALIDATED plan, so none of the work below needs to run.
+    evidence_id = evidence_key(req.siis_response) if caching else None
+    if caching:
+        with timer.stage("cache_lookup"):
+            lookup = get_cache().lookup(enriched, evidence=evidence_id)
+        if lookup.hit and lookup.plan is not None:
+            meta.cache_hit = True
+            meta.cost_usd = 0.0
+            meta.model = lookup.plan.model or meta.model
+            return _finish(req, list(lookup.plan.query_variations), lookup.plan.response,
+                           meta, timer)
 
     with timer.stage("ground"):
         evidence = ground.ground(req.query, req.siis_response)
@@ -105,6 +131,16 @@ def run_pipeline(req: TroubleshootRequest, provider=None) -> TroubleshootEnvelop
     variations = list(extraction.query_variations)[: config.VARIATIONS_MAX]
     usage = provider.last_usage()
     meta.cost_usd = round(usage.get("cost_usd", 0.0), 6)
+
+    # Seed the cache only now, once the plan has passed validation. One cold query stores
+    # ~10 vectors (canonical + every variation), so the next user's differently-worded
+    # complaint lands on this validated plan without an LLM call. Nothing that fell back
+    # is ever stored - store_if_valid enforces that.
+    if caching:
+        with timer.stage("cache_store"):
+            get_cache().store_if_valid(enriched, response, variations, meta.fallback,
+                                       model=meta.model, evidence=evidence_id)
+
     return _finish(req, variations, response, meta, timer)
 
 

@@ -38,9 +38,14 @@ sys.path.insert(0, str(ROOT / "backend"))
 from app import config  # noqa: E402
 from app.contracts import TroubleshootRequest  # noqa: E402
 from app.llm import get_provider  # noqa: E402
+from app.llm.base import LLMProvider  # noqa: E402
 from app.llm.replay import ReplayProvider  # noqa: E402
 from app.main import run_pipeline  # noqa: E402
 from app.pipeline import validate  # noqa: E402
+from app.pipeline.cache import (SemanticCache, evidence_key, get_cache,  # noqa: E402
+                                reset_cache)
+from app.pipeline.embeddings import get_embedder  # noqa: E402
+from app.pipeline.enrich import enrich  # noqa: E402
 from app.pipeline.deeplinks import (GATE_CONCEPT, GATE_MARGIN, GATE_POLARITY, GATE_SCOPE,
                                     GATES_ALL, GATES_NONE, get_catalog)  # noqa: E402
 
@@ -149,6 +154,7 @@ def run_compliance(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any
         provider = get_provider(provider_name)
 
     per_row: List[Dict[str, Any]] = []
+    plans: List[Dict[str, Any]] = []   # validated plans, reused by the cache evaluation
     latencies: List[float] = []
     url_leaks = catalog_invalid = 0
     auto_groups = auto_groups_with_deeplink = 0
@@ -162,7 +168,10 @@ def run_compliance(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any
                 time.sleep(wait)
             next_slot = time.monotonic() + min_interval_s
         t0 = time.perf_counter()
-        env = run_pipeline(req, provider=provider)
+        # use_cache=False: compliance measures the COLD pipeline. With the cache on,
+        # row N could be answered from row M's plan and this would stop being a
+        # measurement of the pipeline at all.
+        env = run_pipeline(req, provider=provider, use_cache=False)
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         latencies.append(elapsed_ms)
         total_cost += env.meta.cost_usd or 0.0
@@ -211,6 +220,15 @@ def run_compliance(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any
         except Exception as exc:
             schema_ok, schema_error = False, str(exc)
 
+        if not env.meta.fallback and response.get("contexts"):
+            plans.append({
+                "row_id": row["id"],
+                "query": row["original_query"],
+                "siis_response": row["siis_response"],
+                "response": response,
+                "variations": list(env.query_variations),
+            })
+
         per_row.append({
             "id": row["id"],
             "actions": n_actions,
@@ -252,6 +270,7 @@ def run_compliance(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any
         "latency_mean_ms": round(statistics.fmean(ordered), 1) if ordered else 0.0,
         "total_cost_usd": round(total_cost, 6),
         "per_row": per_row,
+        "_plans": plans,   # stripped before the report is written; see build_report
     }
 
 
@@ -384,12 +403,294 @@ def run_scope_field_comparison(cases: Sequence[synthetic.Case]) -> Dict[str, Any
     return out
 
 
+# ----------------------------------------------------------------- cache (D3b)
+# Declared BEFORE any held-out number is read. A false positive answers the wrong
+# complaint confidently and fast, and nothing downstream can detect it; a miss only costs
+# one LLM call. So the threshold is chosen for zero false positives first and hit rate
+# second, never the reverse.
+CACHE_THRESHOLD_SWEEP = (0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90)
+CACHE_SEED_VARIATIONS = 5          # variations 1-5 seed the cache
+CACHE_TARGET_HIT_RATE = 80.0       # Theme 2 guide 6.3
+CACHE_TARGET_P95_MS = 300.0        # Theme 2 guide 6.2
+
+
+class _ExplodingProvider(LLMProvider):
+    """Proves a fast-path request never reaches the LLM. If extraction is called at all,
+    the run was not a cache hit and the latency measured would be meaningless."""
+
+    name = "exploding"
+    model = "never-called"
+
+    def extract(self, query: str, evidence: str):  # noqa: ARG002
+        raise AssertionError("LLM called on what should have been a cache hit")
+
+
+def _percentile(values: Sequence[float], q: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    return round(ordered[max(0, int(round(q * (len(ordered) - 1))))], 1)
+
+
+def _seed_cache(cache: SemanticCache, plans: Sequence[Dict[str, Any]]) -> int:
+    """Store each row's plan under its canonical query plus variations 1-5 ONLY.
+
+    Variations 6-10 are never seen by the cache; they are the held-out paraphrases the
+    hit rate is measured on. Seeding with all ten and then querying with those same ten
+    would measure nothing but a dictionary lookup.
+    """
+    for plan in plans:
+        cache.store(enrich(plan["query"]), plan["response"],
+                    plan["variations"][:CACHE_SEED_VARIATIONS],
+                    evidence=evidence_key(plan["siis_response"]))
+    return len(plans)
+
+
+def _probe_cache(cache: SemanticCache, plans: Sequence[Dict[str, Any]],
+                 probe_rows: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Query held-out paraphrases and bucket every outcome.
+
+    A hit is CORRECT only if it returns the plan belonging to the row the paraphrase came
+    from. A hit on another row's plan is a FALSE POSITIVE and is worse than a miss: the
+    user gets a confident, internally valid plan for somebody else's problem.
+    """
+    by_source = {p["query"]: p["row_id"] for p in plans}
+    # Rows are grouped by ARTICLE, not by id. The supplied kit has 20 rows but only 11
+    # distinct articles: six rows share one. Two rows with the same article are the same
+    # cache-equivalence class, because the plan is grounded in that article — scoring a
+    # hit on a sibling as a false positive would repeat exactly the mistake the D2 gold
+    # set makes when it scores a shared catalog message against one arbitrary id.
+    article_of = {p["row_id"]: evidence_key(p["siis_response"]) for p in plans}
+    hits = correct = same_article = cross_article = misses = guard_rejections = 0
+    l0_ms: List[float] = []
+    l1_ms: List[float] = []
+    false_positive_examples: List[Dict[str, Any]] = []
+
+    for row in probe_rows:
+        for probe in row["variations"][CACHE_SEED_VARIATIONS:]:
+            if not probe or not probe.strip():
+                continue
+            started = time.perf_counter()
+            # A real request carries its article; the probe must too, or the evidence
+            # test would be measured against something no caller ever sends.
+            result = cache.lookup(enrich(probe),
+                                  evidence=evidence_key(row["siis_response"]))
+            elapsed = (time.perf_counter() - started) * 1000.0
+
+            if not result.hit:
+                misses += 1
+                if result.guard_rejected:
+                    guard_rejections += 1
+                continue
+
+            hits += 1
+            (l0_ms if result.tier == "L0" else l1_ms).append(elapsed)
+            landed_on = by_source.get(result.source_query or "")
+            if landed_on == row["row_id"]:
+                correct += 1
+            elif article_of.get(landed_on) == article_of.get(row["row_id"]):
+                # Same article, sibling complaint. Not a falsehood: the plan is grounded
+                # in the very article this request supplied. Counted separately because
+                # it is not identical to what a cold run for this exact query would give.
+                same_article += 1
+            else:
+                cross_article += 1
+                if len(false_positive_examples) < 8:
+                    false_positive_examples.append({
+                        "probe": probe,
+                        "expected_row": row["row_id"],
+                        "got_row": landed_on,
+                        "similarity": round(result.similarity or 0.0, 4),
+                        "matched_key": result.matched_key,
+                        "source_query": result.source_query,
+                    })
+
+    probes = hits + misses
+    return {
+        "probes": probes,
+        "hits": hits,
+        "correct_hits": correct,
+        "same_article_hits": same_article,
+        "false_positives": cross_article,     # cross-article only: the real defect
+        "misses": misses,
+        "guard_rejections": guard_rejections,
+        "hit_rate_pct": pct(hits, probes),
+        "correct_hit_rate_pct": pct(correct, probes),
+        "same_article_hit_rate_pct": pct(same_article, probes),
+        "grounded_hit_rate_pct": pct(correct + same_article, probes),
+        "false_positive_rate_pct": pct(cross_article, probes),
+        "l0_hits": len(l0_ms),
+        "l1_hits": len(l1_ms),
+        "lookup_l0_p50_ms": _percentile(l0_ms, 0.50),
+        "lookup_l0_p95_ms": _percentile(l0_ms, 0.95),
+        "lookup_l1_p50_ms": _percentile(l1_ms, 0.50),
+        "lookup_l1_p95_ms": _percentile(l1_ms, 0.95),
+        "false_positive_examples": false_positive_examples,
+    }
+
+
+def _fast_path_latency(plans: Sequence[Dict[str, Any]], threshold: float) -> Dict[str, Any]:
+    """End-to-end run_pipeline latency on requests that hit, measured through the real
+    entry point rather than by timing the lookup in isolation.
+
+    The provider raises if called, so a recorded sample is proof the LLM was skipped.
+    """
+    reset_cache()
+    cache = get_cache()
+    cache.similarity_min = threshold
+    _seed_cache(cache, plans)
+
+    l0: List[float] = []
+    l1: List[float] = []
+    for plan in plans:
+        probes = [(plan["query"], l0)]
+        probes += [(v, l1) for v in plan["variations"][CACHE_SEED_VARIATIONS:]]
+        for probe, bucket in probes:
+            if not probe or not probe.strip():
+                continue
+            request = TroubleshootRequest(query=probe, siis_response=plan["siis_response"])
+            started = time.perf_counter()
+            try:
+                env = run_pipeline(request, provider=_ExplodingProvider())
+            except AssertionError:
+                continue  # a miss: it reached the LLM, so it is not a fast-path sample
+            elapsed = (time.perf_counter() - started) * 1000.0
+            if env.meta.cache_hit:
+                bucket.append(elapsed)
+    reset_cache()
+    return {
+        "l0_samples": len(l0),
+        "l1_samples": len(l1),
+        "l0_p50_ms": _percentile(l0, 0.50),
+        "l0_p95_ms": _percentile(l0, 0.95),
+        "l1_p50_ms": _percentile(l1, 0.50),
+        "l1_p95_ms": _percentile(l1, 0.95),
+        "all_hits_p50_ms": _percentile(l0 + l1, 0.50),
+        "all_hits_p95_ms": _percentile(l0 + l1, 0.95),
+    }
+
+
+def run_cache_eval(plans: Sequence[Dict[str, Any]], cold_latencies: Sequence[float]
+                   ) -> Dict[str, Any]:
+    """Seed / probe split, threshold sweep, and the two numbers Samsung grades."""
+    if len(plans) < 4:
+        return {"status": f"not enough validated plans to measure ({len(plans)})"}
+
+    embedder_name = get_embedder().name
+
+    # Rows are split for THRESHOLD FITTING. The cache is seeded with every row in both
+    # phases, because that is what a production cache holds and it is also the harder
+    # test for false positives; only the PROBES differ between fit and held-out.
+    ordered = sorted(plans, key=lambda p: p["row_id"])
+    shuffled = list(ordered)
+    random.Random(SPLIT_SEED).shuffle(shuffled)
+    midpoint = len(shuffled) // 2
+    fit_rows, holdout_rows = shuffled[:midpoint], shuffled[midpoint:]
+
+    sweep_rows = []
+    for threshold in CACHE_THRESHOLD_SWEEP:
+        cache = SemanticCache(similarity_min=threshold)
+        _seed_cache(cache, ordered)
+        scored = _probe_cache(cache, ordered, fit_rows)
+        scored.pop("false_positive_examples", None)
+        sweep_rows.append({"threshold": threshold, **scored})
+
+    clean = [r for r in sweep_rows if r["false_positives"] == 0]
+    pool = clean or sweep_rows
+    selected = max(pool, key=lambda r: (r["hit_rate_pct"], -r["threshold"]))
+
+    holdout_results = {}
+    for threshold in sorted({selected["threshold"], config.CACHE_SIMILARITY_MIN}):
+        cache = SemanticCache(similarity_min=threshold)
+        _seed_cache(cache, ordered)
+        holdout_results[f"{threshold}"] = {
+            "threshold": threshold, **_probe_cache(cache, ordered, holdout_rows)}
+
+    shipped = holdout_results[f"{config.CACHE_SIMILARITY_MIN}"]
+    latency = _fast_path_latency(ordered, config.CACHE_SIMILARITY_MIN)
+
+    # What the slot guard is worth, measured rather than asserted.
+    unguarded_cache = SemanticCache(similarity_min=config.CACHE_SIMILARITY_MIN,
+                                    slot_guard=False)
+    _seed_cache(unguarded_cache, ordered)
+    unguarded = _probe_cache(unguarded_cache, ordered, holdout_rows)
+    unguarded.pop("false_positive_examples", None)
+
+    distinct_articles = len({evidence_key(p["siis_response"]) for p in ordered})
+
+    # Threshold verdict. The sweep shows zero cross-article false positives at EVERY
+    # threshold, because the evidence key — not the threshold — is what prevents them.
+    # That makes the sweep blind to the failure mode the threshold actually guards:
+    # a within-article mismatch, where one article covers several distinct symptoms and a
+    # battery question lands on a screen plan. Eleven articles barely exercise that, so
+    # taking the lowest-scoring-best threshold would be tuning a safety margin against a
+    # measurement that cannot see what it is for.
+    all_clean = all(r["false_positives"] == 0 for r in sweep_rows)
+    shipped_row = holdout_results[f"{config.CACHE_SIMILARITY_MIN}"]
+    selected_row = holdout_results[f"{selected['threshold']}"]
+    if selected["threshold"] == config.CACHE_SIMILARITY_MIN:
+        verdict = (f"The fit half selected the shipped threshold "
+                   f"{config.CACHE_SIMILARITY_MIN}; nothing to decide.")
+    elif all_clean:
+        verdict = (
+            f"The fit half selected {selected['threshold']}, worth "
+            f"{selected_row['hit_rate_pct'] - shipped_row['hit_rate_pct']:+.1f} points of "
+            f"hit rate on the held-out half. It is NOT adopted. Cross-article false "
+            f"positives are zero at every threshold in the sweep, so the sweep is "
+            f"measuring the evidence key rather than the threshold. What the threshold "
+            f"guards is a within-article mismatch, and {distinct_articles} articles "
+            f"cannot exercise that. The shipped {config.CACHE_SIMILARITY_MIN} is kept as "
+            f"a deliberate safety margin; this is a judgement, not a number the data "
+            f"forced.")
+    else:
+        verdict = (f"The fit half selected {selected['threshold']} under the declared "
+                   f"rule; shipped is {config.CACHE_SIMILARITY_MIN}.")
+
+    return {
+        "status": "measured",
+        "embedder": embedder_name,
+        "distinct_articles": distinct_articles,
+        "seed_variations": CACHE_SEED_VARIATIONS,
+        "protocol": (f"seed the cache with each row's canonical query plus variations "
+                     f"1-{CACHE_SEED_VARIATIONS}; probe with variations "
+                     f"{CACHE_SEED_VARIATIONS + 1}-10, which the cache has never seen"),
+        "selection_rule": "zero false positives first, then maximum hit rate",
+        "seed_rows": len(ordered),
+        "n_fit_rows": len(fit_rows),
+        "n_holdout_rows": len(holdout_rows),
+        "shipped_threshold": config.CACHE_SIMILARITY_MIN,
+        "selected_threshold": selected["threshold"],
+        "selection_had_clean_option": bool(clean),
+        "all_thresholds_clean": all_clean,
+        "verdict": verdict,
+        "fit_sweep": sweep_rows,
+        "holdout": holdout_results,
+        "holdout_shipped": shipped,
+        "unguarded_holdout": unguarded,
+        "latency": latency,
+        "cold_p50_ms": _percentile(cold_latencies, 0.50),
+        "cold_p95_ms": _percentile(cold_latencies, 0.95),
+        "llm_calls_avoided": shipped["hits"],
+        "llm_calls_without_cache": shipped["probes"],
+        "target_hit_rate_pct": CACHE_TARGET_HIT_RATE,
+        "target_p95_ms": CACHE_TARGET_P95_MS,
+        "meets_hit_rate_target": shipped["hit_rate_pct"] >= CACHE_TARGET_HIT_RATE,
+        "meets_latency_target": latency["all_hits_p95_ms"] <= CACHE_TARGET_P95_MS,
+        "meets_zero_false_positives": shipped["false_positives"] == 0,
+    }
+
+
 # ----------------------------------------------------------------- report
 def build_report(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any]:
     cases = synthetic.build_cases()
     catalog = get_catalog()
 
     resolution = score_cases(cases, gates=GATES_ALL)
+    compliance = run_compliance(provider_name, rate_limit_rpm=rate_limit_rpm)
+    # The cache evaluation reuses the plans the compliance run already produced, so
+    # measuring the cache costs no extra LLM calls.
+    plans = compliance.pop("_plans", [])
+    cache_eval = run_cache_eval(plans, [r["latency_ms"] for r in compliance["per_row"]])
     return {
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "provider_requested": provider_name,
@@ -404,17 +705,12 @@ def build_report(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any]:
             "scope_fields": list(config.SCOPE_FIELDS),
         },
         "gold_set": synthetic.stats(),
-        "compliance": run_compliance(provider_name, rate_limit_rpm=rate_limit_rpm),
+        "compliance": compliance,
         "resolution": resolution,
         "ablation": run_ablation(cases),
         "margin_sweep": run_margin_sweep(cases),
         "scope_fields_comparison": run_scope_field_comparison(cases),
-        "cache": {
-            "status": "not implemented (D3b)",
-            "exact_hit_rate_pct": None,
-            "paraphrase_hit_rate_pct": None,
-            "fast_path_p95_ms": None,
-        },
+        "cache": cache_eval,
     }
 
 
@@ -525,13 +821,132 @@ def render_metrics(report: Dict[str, Any]) -> str:
     add("|---|---|")
     add(f"| Extraction provider | `{c['provider']}` |")
     add(f"| Total cost, {c['n_rows']} rows | ${c['total_cost_usd']} |")
-    add(f"| Exact-hash cache hit rate | {report['cache']['status']} |")
-    add(f"| Paraphrase cache hit rate | {report['cache']['status']} |")
-    add(f"| Cache fast-path p95 | {report['cache']['status']} |")
     add("")
     add("Cost is an estimate from published per-token rates, not a billed figure. The "
         "offline stub provider costs nothing, so a stub run reports $0.")
     add("")
+
+    cache = report["cache"]
+    if cache.get("status") != "measured":
+        add(f"Cache: {cache.get('status')}")
+        add("")
+    else:
+        hold = cache["holdout_shipped"]
+        lat = cache["latency"]
+        add("### Semantic cache")
+        add("")
+        add(f"Two tiers in process: L0 is an exact hash of the canonical query, L1 is "
+            f"embedding cosine over every stored key using `{cache['embedder']}`.")
+        add("")
+        add(f"**Protocol.** {cache['protocol'].capitalize()}. Seeding the cache with all "
+            "ten variations and then querying with those same ten would measure a "
+            "dictionary lookup, not generalisation.")
+        add("")
+        add("| Metric | Value | Target |")
+        add("|---|---|---|")
+        add(f"| Rows seeded | {cache['seed_rows']} | |")
+        add(f"| Held-out paraphrases probed | {hold['probes']} | |")
+        add(f"| **Hit rate** | **{hold['hit_rate_pct']}%** | "
+            f">= {cache['target_hit_rate_pct']}% |")
+        add(f"| ... served this row's own plan | {hold['correct_hit_rate_pct']}% | |")
+        add(f"| ... served a sibling row's plan, same article | "
+            f"{hold['same_article_hit_rate_pct']}% | |")
+        add(f"| **Cross-article false positives** | "
+            f"**{hold['false_positive_rate_pct']}%** | 0% |")
+        add(f"| Misses | {hold['misses']} | |")
+        add(f"| Slot-guard rejections | {hold['guard_rejections']} | |")
+        add(f"| L0 / L1 hits | {hold['l0_hits']} / {hold['l1_hits']} | |")
+        add(f"| LLM calls avoided | {cache['llm_calls_avoided']} of "
+            f"{cache['llm_calls_without_cache']} | |")
+        add("")
+        add("A false positive is reported separately because it is worse than a miss. A "
+            "miss costs one LLM call. A false positive answers the wrong complaint "
+            "confidently, in milliseconds, with an internally valid plan that nothing "
+            "downstream can detect as wrong.")
+        add("")
+        add(f"Hits are split three ways because the {cache['seed_rows']} supplied rows "
+            f"carry only {cache['distinct_articles']} distinct articles — six rows share "
+            "one. A hit on a sibling row with the SAME article is not a falsehood: the "
+            "plan served is grounded in the very article the request supplied. It is "
+            "counted apart from an exact-row hit only because it was extracted for a "
+            "differently-worded sibling complaint. A cross-article hit is the real "
+            "defect, and it is what the 0% target refers to.")
+        add("")
+        add("**Latency**, end to end through `run_pipeline` with a provider that raises "
+            "if called, so every sample is proof the LLM was skipped.")
+        add("")
+        add("| Path | p50 | p95 | Target p95 |")
+        add("|---|---|---|---|")
+        add(f"| L0 hit (exact) | {lat['l0_p50_ms']} ms | {lat['l0_p95_ms']} ms | "
+            f"{cache['target_p95_ms']} ms |")
+        add(f"| L1 hit (semantic) | {lat['l1_p50_ms']} ms | {lat['l1_p95_ms']} ms | "
+            f"{cache['target_p95_ms']} ms |")
+        add(f"| All hits | {lat['all_hits_p50_ms']} ms | {lat['all_hits_p95_ms']} ms | "
+            f"{cache['target_p95_ms']} ms |")
+        add(f"| Cold miss (full pipeline) | {cache['cold_p50_ms']} ms | "
+            f"{cache['cold_p95_ms']} ms | n/a |")
+        add("")
+        verdicts = [
+            f"hit rate {'MET' if cache['meets_hit_rate_target'] else 'NOT MET'}",
+            f"p95 {'MET' if cache['meets_latency_target'] else 'NOT MET'}",
+            f"zero false positives {'MET' if cache['meets_zero_false_positives'] else 'NOT MET'}",
+        ]
+        add("Targets: " + "; ".join(verdicts) + ".")
+        add("")
+
+        guard = cache["unguarded_holdout"]
+        add(f"**What the slot guard is worth.** With the device/domain guard removed, the "
+            f"same held-out probes give {guard['hit_rate_pct']}% hit rate and "
+            f"{guard['false_positive_rate_pct']}% cross-article false positives, against "
+            f"{hold['hit_rate_pct']}% and {hold['false_positive_rate_pct']}% with it.")
+        if guard["false_positives"] <= hold["false_positives"]:
+            add("")
+            add(f"On this corpus the guard therefore costs "
+                f"{guard['hit_rate_pct'] - hold['hit_rate_pct']:.1f} points of hit rate "
+                "and prevents nothing measurable, because the evidence key already makes "
+                "a cross-article hit impossible. Read that as 'not exercised here', not "
+                "as 'useless': the guard is what separates two complaints that share an "
+                "article but not a device or a domain, and an article covering several "
+                "symptoms is exactly where it would earn its place. It is kept for the "
+                "same reason gate [3] is kept in section 5 — the measurement is blind to "
+                "the case it exists for.")
+        add("")
+        if hold.get("false_positive_examples"):
+            add("False positives, up to 8:")
+            add("")
+            add("| Probe | Expected | Landed on | Similarity |")
+            add("|---|---|---|---|")
+            for fp in hold["false_positive_examples"]:
+                add(f"| `{fp['probe']}` | {fp['expected_row']} | {fp['got_row']} | "
+                    f"{fp['similarity']} |")
+            add("")
+
+        add("#### 4.1 Similarity threshold sweep")
+        add("")
+        add(f"Fitted on {cache['n_fit_rows']} rows' held-out paraphrases and reported on "
+            f"the other {cache['n_holdout_rows']} rows' (seed {report['margin_sweep']['seed']}). "
+            f"Selection rule, declared before the split: {cache['selection_rule']}.")
+        add("")
+        add("| Threshold | Hit rate | Correct | False positives | Guard rejections |")
+        add("|---|---|---|---|---|")
+        for row in cache["fit_sweep"]:
+            marker = " <-selected" if row["threshold"] == cache["selected_threshold"] else ""
+            add(f"| {row['threshold']}{marker} | {row['hit_rate_pct']}% | "
+                f"{row['correct_hit_rate_pct']}% | {row['false_positive_rate_pct']}% "
+                f"({row['false_positives']}) | {row['guard_rejections']} |")
+        add("")
+        add("Held-out rows:")
+        add("")
+        add("| Threshold | Hit rate | Correct | False positives |")
+        add("|---|---|---|---|")
+        for row in cache["holdout"].values():
+            add(f"| {row['threshold']} | {row['hit_rate_pct']}% | "
+                f"{row['correct_hit_rate_pct']}% | {row['false_positive_rate_pct']}% "
+                f"({row['false_positives']}) |")
+        add("")
+        add(f"Shipped threshold = {cache['shipped_threshold']}; the fit half selected "
+            f"{cache['selected_threshold']}. {cache['verdict']}")
+        add("")
 
     # ---- 5
     add("## 5. Gate ablation")
@@ -631,8 +1046,13 @@ def render_metrics(report: Dict[str, Any]) -> str:
             "wording — the factory-reset trap in "
             "`backend/tests/test_resolver.py` is the production case it was built for. "
             "Read the V2 row as 'costs nothing here', not as 'does nothing'.")
-    add("- **The semantic cache is not implemented** (D3b). Every cache figure in section 4 "
-        "is marked accordingly rather than estimated.")
+    cache = report["cache"]
+    if cache.get("status") == "measured":
+        add("- **The cache is measured on 20 rows' paraphrases, not on production "
+            "traffic.** The held-out paraphrases come from the same extractor that wrote "
+            "the seeds, so they are more consistent in register than real users would be. "
+            "The false-positive number is the one to watch as the corpus grows: more "
+            "stored plans means more chances to land on the wrong one.")
     add("- **Latency excludes network time to the LLM** when run against the offline stub. "
         "A live provider run reports real extraction latency in the same table.")
     add("- **Cost is an estimate** from published per-token rates, not a billed amount.")
