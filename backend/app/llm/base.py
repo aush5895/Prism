@@ -28,12 +28,13 @@ STRUCTURE
 - One action = one physical screen or feature. Several taps on the SAME screen belong to ONE action, not several.
 - NEVER combine a manual/physical step (cleaning, removing an accessory, handling hardware) with a Settings-screen step (opening Settings, tapping a toggle) in the same action, even if the source text discusses them in the same paragraph. They are different actions with different category_hint values — split them.
 - If one screen supports two distinct operations that the text describes separately (for example an enable path and a disable path under different conditions), emit them as two step_groups under ONE action.
-- Each step is one physical interaction, written as an imperative.
+- Each step is ONE physical interaction, written as an imperative. Never merge a navigation sequence into a single sentence: "Navigate to Settings, tap Display, and tap the switch" is four interactions and must be four steps. The customer follows these one at a time.
+- A step that sets a toggle MUST say which way it is being set: end it "to enable it" or "to disable it". "Tap the switch next to X." is ambiguous and unusable, because nothing downstream can tell whether the user is turning X on or off. If two actions differ only in direction, this wording is the only thing separating them and both must carry it.
 - category_hint: "auto" for a Settings screen the user can be taken to; "critical" for disruptive or irreversible operations (factory reset, restart, firmware update, safe mode); "manual" for physical interventions (cleaning, removing an accessory, replacing hardware, contacting support).
-- description: begins "It will" and states the concrete benefit.
+- description: begins "It will" and states the concrete benefit in a complete phrase of 5 to 7 words AFTER "It will" (count them; 4 is too few). End the phrase at that length rather than writing a longer sentence, and never end on a preposition or conjunction. Good: "It will stop gestures from misreading taps". Bad: "It will improve touch response" (4 words), "It will remove obstructions that interfere with" (trails off).
 - title: 2 to 3 words naming the core issue, sentence case.
 - goal_topic: 1 to 3 words naming the topic, Title Case.
-- query_variations: 8 to 10 distinct paraphrases of the USER COMPLAINT across registers: formal, casual, keyword-only, frustrated, typo-inclusive.
+- query_variations: 8 to 10 distinct paraphrases of the USER COMPLAINT. These are what the NEXT user might type, so most must be full sentences that still name the device and the symptom, not search keywords. Vary the register: formal, casual, frustrated, typo-inclusive, and AT MOST two keyword-only. A list of bare keywords like "screen lag" / "touch delay" is wrong: it drops the device and the context, and two such paraphrases are indistinguishable from each other.
 """
 
 USER_TEMPLATE = """USER COMPLAINT:

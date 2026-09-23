@@ -23,7 +23,24 @@ TIER_CRITICAL = 4
 
 
 def action_text(action: ExtractedAction) -> str:
-    parts = [action.action_name, action.description]
+    """What the action DOES: its name and its steps. The description is excluded.
+
+    REGRESSION this fixes: `description` is authored prose about a benefit or a
+    precondition, not a statement of what the user performs, and matching lexicons
+    against it misclassified actions on incidental words. Measured over the 20 supplied
+    rows, three actions were wrong for exactly this reason:
+
+      "Adjust touch sensitivity"  -> manual, because its description read "when using a
+                                     screen protector". A manual action may never carry a
+                                     deeplink (guide §4.1), so the Settings link was lost.
+      "Charge the device" (x2)    -> critical AND a device operation, because the
+                                     description read "to boot after a forced restart".
+                                     Charging is neither, and `critical` sorts it last.
+
+    The classifiers below all read this, so the exclusion applies to categorisation,
+    tiering and both gate [0] predicates alike.
+    """
+    parts = [action.action_name]
     for group in action.step_groups:
         parts.extend(s.text for s in group.steps)
     return " ".join(parts)

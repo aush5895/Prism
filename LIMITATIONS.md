@@ -178,6 +178,29 @@ overstate it.
   `display`, and the second was refused the first's cached plan. This is part of the 4
   points of hit rate the guard costs.
 
+### 2.5 Descriptions are padded to reach Samsung's word floor
+
+Guide §4.1 requires 5–7 words, and Phase 0 resolved ambiguity **A4** to mean 5–7 words
+*after* the "It will" prefix, because that reading makes Samsung's own sample #1 exactly
+compliant. That resolution stands.
+
+The model does not reliably hit it. Told to count, it still lands on four words most of
+the time ("It will remove moisture and debris"), which is one short of the floor. Guide
+§7.5 says exactly this: a word count cannot be enforced by prompting, only in the
+application layer. So `repair_description` appends a completion word, and on a plan where
+most descriptions are four words the same word appears on most cards.
+
+Two things were fixed properly rather than papered over. Truncation no longer cuts
+mid-phrase — trailing prepositions and conjunctions are dropped, so
+"It will remove physical obstructions that may interfere with" is gone. And the padding
+completes the phrase instead of repeating the filler token "issue".
+
+What remains is the repetition. The real fix is the repair loop that was cut as D3c: ask
+the model again for a 5–7 word phrase rather than pad it. Phase 0 also promised a
+`DESC_WORD_MODE` flag so A4 could be flipped in one line if a mentor disagreed; that flag
+was never implemented, and implementing it would make this moot if the other reading is
+the intended one.
+
 ### 2.5 Presentation constraints visible in the customer view
 
 - **Descriptions are truncated mid-phrase.** Guide §4.1 caps `description` at 5–7 words
@@ -185,13 +208,11 @@ overstate it.
   sentence longer than that is clamped: "It will remove physical obstructions that may
   interfere with" simply stops. The cap is the contract's, not ours, and the alternative
   is failing validation, but it reads poorly to a customer.
-- **A Settings action can be badged "Do this by hand".** The emitted category is
-  rule-derived, and an action whose steps navigate to a Settings screen without saying
-  which way to set the toggle is deliberately not treated as `auto` — gate [2] will not
-  guess a polarity. On row_21 that makes "Adjust Touch Sensitivity" a manual card with no
-  button, even though its steps are a Settings path. That is the safe direction (no
-  guessed deeplink) but it looks inconsistent beside "Disable Touch Sensitivity", which
-  does carry one.
+- **An `auto` action with no deeplink says so.** Gate [2] will not guess a toggle's
+  direction, so a Settings action can legitimately end up with no link. The card now reads
+  "Open Settings yourself — we could not tell which way to set this" rather than silently
+  missing its button. The badge has always come from `category`; it is never inferred from
+  deeplink presence.
 
 ### 2.5 Extraction
 

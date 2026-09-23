@@ -69,6 +69,9 @@ export function CustomerView({ envelope }) {
       </header>
 
       {context.actions.map((action, i) => {
+        // Badge from the emitted `category` ONLY. Never from deeplink presence: an
+        // auto action whose screen could not be resolved is still a Settings change, and
+        // badging it "Do this by hand" would contradict its own steps.
         const words = CATEGORY_WORDS[action.category] || CATEGORY_WORDS.manual
         return (
           <article className="cust-card" key={i}>
@@ -90,7 +93,16 @@ export function CustomerView({ envelope }) {
                 <ol className="cust-steps">
                   {group.steps.map((step, k) => <li key={k}>{step}</li>)}
                 </ol>
-                {group.actionableDeeplink && <OpenButton deeplink={group.actionableDeeplink} />}
+                {group.actionableDeeplink
+                  ? <OpenButton deeplink={group.actionableDeeplink} />
+                  : action.category === 'auto' && (
+                      // A Settings action we could not link: the resolver declined to
+                      // guess which screen or which way to set it. Say so plainly rather
+                      // than leave a card that looks like it is missing its button.
+                      <p className="cust-selfserve">
+                        Open Settings yourself — we could not tell which way to set this.
+                      </p>
+                    )}
               </div>
             ))}
           </article>

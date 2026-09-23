@@ -60,6 +60,24 @@ DESCRIPTION_MAX_WORDS = 7
 TITLE_MIN_WORDS = 2
 TITLE_MAX_WORDS = 3
 GOAL_TEMPLATE = "Follow these steps to perform this {topic} Troubleshooting"
+# Words a description may never END on. The 5-7 word window is Samsung's (guide §4.1) and
+# is not negotiable, so a longer sentence has to be cut -- but cutting mid-phrase produced
+# "It will remove physical obstructions that may interfere with" on a customer-facing
+# card. After trimming, trailing words from this set are dropped until the phrase closes
+# properly or the 5-word floor is reached.
+DESCRIPTION_DANGLING_WORDS = frozenset({
+    "with", "that", "and", "to", "for", "in", "on", "of", "or", "as", "at", "by", "from",
+    "into", "the", "a", "an", "when", "while", "after", "before", "than", "its", "your",
+    "their", "this", "these", "which", "but", "so",
+})
+# Completion words for a description the model wrote below the 5-word floor. Guide §7.5 is
+# explicit that a word count cannot be enforced by prompting, and measurement agrees: even
+# told to count, the model lands on 4 words most of the time. So the floor is met here.
+#
+# Every entry must be able to END a phrase, because they are appended one at a time and a
+# padded description must never dangle. Adverbs, not prepositions: "on your device" as a
+# unit reads fine but padded onto all ten cards it becomes a visible tic.
+DESCRIPTION_COMPLETION = ("properly", "correctly", "overall")
 VARIATIONS_MIN = 8
 VARIATIONS_MAX = 10
 

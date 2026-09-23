@@ -1,27 +1,27 @@
 {
   "query": "My Galaxy S22 screen inputs are delayed and the touch responsiveness is laggy, causing a noticeable delay when I try to interact with the phone.",
   "query_variations": [
-    "screen laggy",
-    "touch input delay",
-    "unresponsive screen",
-    "slow touch response",
-    "touchscreen not working properly",
-    "screen delay",
-    "laggy touch",
-    "touch input lag",
-    "screen touch issues",
-    "delayed touch response"
+    "My Galaxy S22 screen inputs are delayed.",
+    "Why is my S22 touch responsiveness so laggy?",
+    "There is a noticeable delay when I touch my S22 screen.",
+    "My Samsung phone screen is lagging when I tap it.",
+    "Galaxy S22 touch screen input delay issues.",
+    "Touch screen lag on my Galaxy S22.",
+    "My phone screen is not responding to my touch immediately.",
+    "S22 touch input is slow and unresponsive.",
+    "Galaxy S22 screen lag.",
+    "Touch delay S22."
   ],
   "response": {
     "contexts": [
       {
         "goal": "Follow these steps to perform this Touchscreen Performance Troubleshooting",
-        "title": "Touchscreen responsiveness issues",
-        "score": 0.76,
+        "title": "Touchscreen input delay",
+        "score": 0.75,
         "actions": [
           {
             "actionName": "Remove Screen Accessories",
-            "description": "It will remove physical obstructions that may interfere with",
+            "description": "It will remove obstructions that interfere properly",
             "category": "manual",
             "stepGroups": [
               {
@@ -34,24 +34,8 @@
             ]
           },
           {
-            "actionName": "Adjust Touch Sensitivity",
-            "description": "It will improve touch recognition when using a screen",
-            "category": "manual",
-            "stepGroups": [
-              {
-                "steps": [
-                  "Open Settings.",
-                  "Tap Display.",
-                  "Tap the switch next to Touch sensitivity."
-                ],
-                "actionableDeeplink": null,
-                "validationDeeplink": null
-              }
-            ]
-          },
-          {
             "actionName": "Clean The Screen",
-            "description": "It will remove moisture or debris that may cause",
+            "description": "It will remove moisture and debris safely",
             "category": "manual",
             "stepGroups": [
               {
@@ -65,12 +49,12 @@
           },
           {
             "actionName": "Change The Charger",
-            "description": "It will ensure the device receives adequate power to",
+            "description": "It will provide sufficient power for operation",
             "category": "manual",
             "stepGroups": [
               {
                 "steps": [
-                  "Use a different, undamaged charger."
+                  "Try using a different, undamaged charger."
                 ],
                 "actionableDeeplink": null,
                 "validationDeeplink": null
@@ -78,8 +62,35 @@
             ]
           },
           {
+            "actionName": "Adjust Touch Sensitivity",
+            "description": "It will improve touch response for screens",
+            "category": "auto",
+            "stepGroups": [
+              {
+                "steps": [
+                  "Open Settings.",
+                  "Tap Display.",
+                  "Tap the switch next to Touch sensitivity to enable it."
+                ],
+                "actionableDeeplink": {
+                  "deeplink": "bixby://masked/act/14eb42b895",
+                  "description": "Enables touch sensitivity via device Settings on the device.",
+                  "message": "Enable Touch sensitivity",
+                  "originalType": "onURL"
+                },
+                "validationDeeplink": {
+                  "deeplink": "bixby://masked/val/6451858b28",
+                  "key": "Touch sensitivity",
+                  "resultType": "boolean",
+                  "condition": "equal",
+                  "value": "True"
+                }
+              }
+            ]
+          },
+          {
             "actionName": "Disable Touch Sensitivity",
-            "description": "It will prevent the screen from becoming overly sensitive",
+            "description": "It will prevent overly sensitive screen inputs",
             "category": "auto",
             "stepGroups": [
               {
@@ -103,15 +114,15 @@
           },
           {
             "actionName": "Disable Full Screen Gestures",
-            "description": "It will prevent touch inputs from being misinterpreted as",
+            "description": "It will stop gestures from misreading taps",
             "category": "auto",
             "stepGroups": [
               {
                 "steps": [
-                  "Go to Settings.",
+                  "Open Settings.",
                   "Tap Display.",
                   "Tap Navigation bar.",
-                  "Select Buttons."
+                  "Select Buttons to disable full screen gestures."
                 ],
                 "actionableDeeplink": {
                   "deeplink": "bixby://masked/act/2f3dd95259",
@@ -128,12 +139,12 @@
           },
           {
             "actionName": "Contact Support",
-            "description": "It will provide further assistance if the issue persists",
+            "description": "It will provide expert help for issues",
             "category": "manual",
             "stepGroups": [
               {
                 "steps": [
-                  "Reach out to Samsung Support."
+                  "Reach out to Samsung Support for further assistance."
                 ],
                 "actionableDeeplink": null,
                 "validationDeeplink": null
@@ -142,30 +153,14 @@
           },
           {
             "actionName": "Restart The Device",
-            "description": "It will clear minor software glitches affecting the touchscreen",
+            "description": "It will clear temporary system glitches effectively",
             "category": "critical",
             "stepGroups": [
               {
                 "steps": [
-                  "Press and hold the Power button, then tap Restart.",
+                  "Press and hold the Power button.",
+                  "Tap Restart.",
                   "Tap Restart again to confirm."
-                ],
-                "actionableDeeplink": null,
-                "validationDeeplink": null
-              },
-              {
-                "steps": [
-                  "Swipe down from the top of the screen with two fingers to open the Quick settings panel.",
-                  "Tap the Power icon, then tap Restart.",
-                  "Tap Restart again to confirm."
-                ],
-                "actionableDeeplink": null,
-                "validationDeeplink": null
-              },
-              {
-                "steps": [
-                  "Press and hold the Volume down button and the Power button simultaneously for about 10 seconds.",
-                  "Press the Power button or Side button again to turn it back on."
                 ],
                 "actionableDeeplink": null,
                 "validationDeeplink": null
@@ -174,13 +169,14 @@
           },
           {
             "actionName": "Enter Safe Mode",
-            "description": "It will help identify if third-party apps are causing",
+            "description": "It will isolate third party app issues",
             "category": "critical",
             "stepGroups": [
               {
                 "steps": [
                   "Press and hold the Power button and the Volume down button at the same time.",
-                  "Touch and hold Power off, then tap Safe mode."
+                  "Touch and hold Power off.",
+                  "Tap Safe mode."
                 ],
                 "actionableDeeplink": null,
                 "validationDeeplink": null
@@ -189,12 +185,12 @@
           },
           {
             "actionName": "Perform Factory Reset",
-            "description": "It will erase all data and restore the device",
+            "description": "It will restore device to original state",
             "category": "critical",
             "stepGroups": [
               {
                 "steps": [
-                  "Navigate to and open Settings.",
+                  "Open Settings.",
                   "Tap General management.",
                   "Tap Reset.",
                   "Tap Factory data reset.",

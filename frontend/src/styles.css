@@ -252,3 +252,9 @@ header.top .spacer { flex: 1; }
 }
 .cust-empty h2 { margin: 0 0 8px; font-size: 24px; }
 .cust-empty p { margin: 0; color: var(--dim); font-size: 17px; max-width: 60ch; }
+
+.cust-selfserve {
+  margin: 14px 0 0; padding: 11px 14px; border-radius: 9px;
+  background: var(--panel-2); border-left: 3px solid var(--info);
+  color: var(--dim); font-size: 15.5px;
+}

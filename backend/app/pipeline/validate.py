@@ -24,17 +24,41 @@ class ValidationError(Exception):
 
 # ----------------------------------------------------------------- repair
 def repair_description(text: str) -> str:
-    """Force `It will` + 5-7 words. A5/A4: the window counts words AFTER the prefix."""
+    """Force `It will` + 5-7 words. A5/A4: the window counts words AFTER the prefix.
+
+    Trimming never leaves a dangling word. The word cap is Samsung's and stays, but a
+    sentence cut at exactly seven words produced customer-facing cards reading "It will
+    remove physical obstructions that may interfere with". After the cut, trailing
+    conjunctions, prepositions and articles are dropped until the phrase closes or the
+    five-word floor is reached. The prompt now asks for a complete 5-7 word phrase in the
+    first place (see llm/base.py); this is the guarantee for when it does not comply.
+    """
     body = text.strip()
     if body.lower().startswith(config.DESCRIPTION_PREFIX.lower()):
         body = body[len(config.DESCRIPTION_PREFIX):].strip()
     body = body.rstrip(".")
-    words = [w for w in body.split() if w]
+    words = _drop_dangling([w for w in body.split() if w])
     if len(words) > config.DESCRIPTION_MAX_WORDS:
-        words = words[: config.DESCRIPTION_MAX_WORDS]
+        words = _drop_dangling(words[: config.DESCRIPTION_MAX_WORDS])
+    # Too short: complete the phrase rather than repeat a filler token. Padding used to
+    # append "issue" per missing word, which turned a model's trailing "...obstructions
+    # that" into "...obstructions that issue".
+    completion = config.DESCRIPTION_COMPLETION
+    pad = 0
     while len(words) < config.DESCRIPTION_MIN_WORDS:
-        words.append("issue")
+        words.append(completion[pad % len(completion)])
+        pad += 1
+    if len(words) > config.DESCRIPTION_MAX_WORDS:
+        words = _drop_dangling(words[: config.DESCRIPTION_MAX_WORDS])
     return f"{config.DESCRIPTION_PREFIX} " + " ".join(words)
+
+
+def _drop_dangling(words: List[str]) -> List[str]:
+    """Remove trailing words a phrase may not end on. Never empties the list."""
+    out = list(words)
+    while len(out) > 1 and out[-1].strip(".,;:").lower() in config.DESCRIPTION_DANGLING_WORDS:
+        out.pop()
+    return out
 
 
 def repair_title(text: str) -> str:
