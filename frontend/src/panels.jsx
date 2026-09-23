@@ -12,7 +12,7 @@ export function EnrichmentPanel({ query, enrichment }) {
   ]
   return (
     <section className="panel">
-      <h2><span className="n">1</span> Query &amp; enrichment</h2>
+      <h2><span className="n">1</span> What the customer said, and what we read from it</h2>
       <div className="raw-complaint">{query}</div>
       <div className="slots">
         {slots.map(([k, v]) => (
@@ -62,7 +62,7 @@ export function GroundingPanel({ evidence, spans, steps, activeStep, setActiveSt
   return (
     <section className="panel">
       <h2>
-        <span className="n">2</span> Grounding
+        <span className="n">2</span> Where each step came from
         <span className="note">
           {located.length}/{spans.length} steps traced to the article
           {unlocated ? ` · ${unlocated} not locatable` : ''}
@@ -98,7 +98,7 @@ export function ResolverPanel({ resolutions }) {
   return (
     <section className="panel wide">
       <h2>
-        <span className="n">3</span> Resolver — accepted vs rejected
+        <span className="n">3</span> Why this screen was chosen
         <span className="note">gates [2] polarity · [3] scope · [4] target concept · [5] margin</span>
       </h2>
       {resolutions.map((r, i) => (
@@ -158,7 +158,7 @@ export function PlanPanel({ response }) {
   if (!context) {
     return (
       <section className="panel">
-        <h2><span className="n">4</span> Plan</h2>
+        <h2><span className="n">4</span> The plan we sent back</h2>
         <p className="empty">No plan — the pipeline fell back rather than guess.</p>
       </section>
     )
@@ -166,7 +166,7 @@ export function PlanPanel({ response }) {
   return (
     <section className="panel">
       <h2>
-        <span className="n">4</span> Plan
+        <span className="n">4</span> The plan we sent back
         <span className="note">tier order · score {context.score}</span>
       </h2>
       <div style={{ marginBottom: 12 }}>
@@ -217,7 +217,7 @@ export function TelemetryPanel({ meta, cache, lastColdMs }) {
 
   return (
     <section className="panel">
-      <h2><span className="n">5</span> Telemetry</h2>
+      <h2><span className="n">5</span> What it cost to answer</h2>
 
       <div className={hit ? 'cachebar hit' : 'cachebar miss'}>
         {hit

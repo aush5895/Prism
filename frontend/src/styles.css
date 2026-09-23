@@ -190,3 +190,65 @@ header.top .spacer { flex: 1; }
 .empty { color: var(--dim); font-style: italic; padding: 8px 0; }
 
 @media (max-width: 1100px) { .panels { grid-template-columns: 1fr; } }
+
+/* ===================================================================== customer view
+   Larger type and more air than the engineer view: this is the one a judge reads from
+   across a room, and the only thing on screen is the plan. */
+
+.viewtoggle { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.viewtoggle button {
+  font: inherit; font-weight: 600; border: none; cursor: pointer;
+  background: var(--panel); color: var(--dim); padding: 9px 18px;
+}
+.viewtoggle button.on { background: var(--info); color: #06121f; }
+
+.cust { max-width: 940px; margin: 0 auto; }
+
+.cust-head { margin-bottom: 22px; }
+.cust-head h2 { font-size: 30px; margin: 0 0 4px; letter-spacing: -0.3px; }
+.cust-head p { margin: 0; color: var(--dim); font-size: 17px; }
+
+.cust-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 20px 22px; margin-bottom: 16px;
+}
+.cust-card-head { display: flex; align-items: center; gap: 13px; flex-wrap: wrap; }
+.cust-num {
+  flex: none; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--panel-2); border: 1px solid var(--line);
+  display: grid; place-items: center; font-weight: 700; font-size: 16px;
+}
+.cust-card-head h3 { font-size: 21px; margin: 0; flex: 1; min-width: 200px; }
+.cust-badge {
+  border-radius: 999px; padding: 5px 14px; font-size: 13.5px; font-weight: 700;
+  white-space: nowrap;
+}
+.cust-badge.auto     { background: rgba(94, 179, 255, 0.18); color: var(--info); }
+.cust-badge.manual   { background: var(--panel-2); color: var(--dim); }
+.cust-badge.critical { background: rgba(255, 107, 107, 0.16); color: var(--reject); }
+
+.cust-why { color: var(--dim); font-size: 16px; margin: 10px 0 0 47px; }
+.cust-group { margin-left: 47px; }
+.cust-alt {
+  margin-top: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 1.2px;
+  color: var(--dim);
+}
+.cust-steps { margin: 10px 0 0; padding-left: 22px; font-size: 17px; line-height: 1.75; }
+.cust-steps li { margin-bottom: 3px; }
+
+.open-wrap { margin-top: 14px; }
+.open-btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--accept); color: #04210f; border: none; border-radius: 10px;
+  font: inherit; font-size: 17px; font-weight: 700; padding: 13px 22px; cursor: pointer;
+}
+.open-btn:hover { filter: brightness(1.08); }
+.open-icon { font-size: 22px; line-height: 1; }
+.open-note { display: block; margin-top: 6px; color: var(--dim); font-size: 13.5px; }
+
+.cust-empty {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 28px 26px;
+}
+.cust-empty h2 { margin: 0 0 8px; font-size: 24px; }
+.cust-empty p { margin: 0; color: var(--dim); font-size: 17px; max-width: 60ch; }

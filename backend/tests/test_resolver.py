@@ -8,7 +8,7 @@ import pytest
 from app import config
 from app.ir import ExtractedAction, ExtractedStep, ExtractedStepGroup, Extraction
 from app.pipeline import assemble, ordering
-from app.pipeline.deeplinks import intent_for_candidate, parse_intent
+from app.pipeline.deeplinks import intent_for_candidate, load_lexicons, parse_intent
 from app.text import coverage
 
 
@@ -106,6 +106,93 @@ def test_onurl_carries_full_validation_and_offurl_key_only(catalog):
     assert on.validation["condition"] == "equal" and on.validation["value"] == "True"
     assert set(off.validation) == {"deeplink", "key"}
     assert on.validation["key"] == off.validation["key"] == "Touch sensitivity"
+
+
+# ------------------------------------------- compound names (tokenisation)
+def test_a_hyphenated_name_reaches_its_closed_up_catalog_entry(catalog):
+    """REGRESSION: tokens("Wi-Fi") was ["wi", "fi"] and tokens("WiFi") was ["wifi"], two
+    sets that never intersect. This step ranked DL-0308 "View WiFi Settings" at BM25 0.77
+    and then killed it at gate [4] on coverage 0.00.
+
+    Gold is the equivalence CLASS, not one id. Six catalog entries share the message
+    "View WiFi Settings" -- Wi-Fi scanning, Wi-Fi settings, automatic Wi-Fi turn on,
+    Intelligent Wi-Fi, Hotspot 2.0, switch to mobile data on poor Wi-Fi -- separable only
+    by `description`, which gate [3] deliberately does not read. Asserting DL-0308
+    specifically would be asserting a coin flip between six.
+    """
+    step = "Navigate to Settings, tap Connections, and then tap Wi-Fi."
+    res = catalog.resolve_step(step)
+    assert res.is_exact
+    assert res.deeplink["message"] == "View WiFi Settings"
+
+    wifi_class = {e["id"] for e in catalog.entries if e["message"] == "View WiFi Settings"}
+    assert "DL-0308" in wifi_class
+    assert res.catalog_id in wifi_class
+
+
+@pytest.mark.parametrize("written,expected", [
+    ("Wi-Fi", ["wifi"]), ("WiFi", ["wifi"]), ("wi_fi", ["wifi"]),
+    ("Auto-Sync", ["autosync"]), ("e-SIM", ["esim"]),
+])
+def test_compound_names_tokenise_identically_however_they_are_written(written, expected):
+    from app.text import tokens
+    assert tokens(written) == expected
+
+
+def test_the_joiner_strip_applies_to_the_catalog_side_too(catalog):
+    """Normalising only the step would move the mismatch rather than remove it."""
+    from app.text import coverage
+    assert coverage("View WiFi Settings", "tap Wi-Fi") == 1.0
+    assert coverage("View Wi-Fi Settings", "tap WiFi") == 1.0
+
+
+# ------------------------------------------- gate [0] hardware vs touchscreen
+def test_a_long_press_on_an_onscreen_element_is_not_physical(catalog):
+    """REGRESSION: "touch and hold" was itself a physical trigger, so a touchscreen
+    gesture on a named on-screen element read as a hardware interaction. Gate [0] tests
+    the WHOLE action, so this one step nulled every step group in its action and the
+    action lost a valid Wi-Fi deeplink.
+
+    Measured over the 20 supplied articles: "touch and hold" occurs 5 times, 2 on hardware
+    and 3 on ordinary screen elements.
+    """
+    action = _action("Verify internet connection",
+                     ["Touch and hold the Wi-Fi icon to check your connection status.",
+                      "Navigate to Settings, tap Connections, and then tap Wi-Fi."],
+                     hint="auto")
+    assert ordering.is_physical(action) is False
+
+    resolved = assemble.resolve_actions(Extraction(goal_topic="T", title="t",
+                                                   actions=[action]), catalog)
+    res = resolved[0].resolutions[0]
+    assert res.is_exact, "a touchscreen gesture must not cost the action its deeplink"
+    assert res.deeplink["message"] == "View WiFi Settings"
+
+
+@pytest.mark.parametrize("steps", [
+    ["Press and hold the Power button, then tap Restart."],
+    ["Touch and hold Power off, then tap Safe mode."],
+    ["Press and hold the Power button and the Volume down button at the same time."],
+])
+def test_a_long_press_on_a_hardware_control_is_still_physical(catalog, steps):
+    """The other direction. The control is named in the same action, so it fires on the
+    control rather than on the gesture, and the deeplink stays null."""
+    action = _action("Restart the device", steps, hint="critical")
+    assert ordering.is_physical(action) is True
+
+    resolved = assemble.resolve_actions(Extraction(goal_topic="T", title="t",
+                                                   actions=[action]), catalog)
+    assert all(r.deeplink is None for r in resolved[0].resolutions)
+
+
+def test_bare_hold_gestures_are_data_but_never_a_trigger():
+    """Kept in the lexicon so the distinction is visible, and deliberately not consulted
+    by is_physical."""
+    lex = load_lexicons()
+    assert "hold_gestures" in lex
+    assert "touch and hold" in lex["hold_gestures"]
+    assert "touch and hold" not in lex["physical_interaction"]
+    assert "press and hold" not in lex["physical_interaction"]
 
 
 # ------------------------------------------------------------ gate [3] scope

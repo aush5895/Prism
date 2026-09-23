@@ -61,17 +61,43 @@ manual:
 
 # --- physical interaction: forces deeplink = null even when category is critical ---
 # A hardware button sequence is not a Settings screen, so it can never carry a deeplink.
+#
+# REGRESSION this shape fixes: the list used to contain the bare gestures "press and hold"
+# and "touch and hold". Those describe HOW a control is operated, not WHAT is operated, and
+# a touchscreen long-press is not a hardware interaction. Measured across the 20 supplied
+# articles, "touch and hold" occurs 5 times: twice on hardware ("Touch and hold Power off")
+# and three times on ordinary on-screen elements ("Touch and hold the Wi-Fi icon", "Touch
+# and hold your desired app"). Because gate [0] tests the WHOLE action, one such step
+# poisoned every step group in its action -- "Verify Internet Connection" returned
+# physical_interaction_not_a_settings_screen and lost a valid Wi-Fi deeplink.
+#
+# A phrase now counts as physical only when it names a hardware control or an inherently
+# hands-on act. When a gesture really is operating hardware, the control itself is named
+# in the same action ("Press and hold the Power button") and fires on that.
 physical_interaction:
+  # hardware controls: a physical button or part of the device
+  - side button
+  - power button
+  - power off          # the power control itself, reached by holding power/side
+  - bixby button
+  - volume down
+  - volume up
+  - volume button
+  - hardware key
+  # inherently hands-on: no screen is involved at all
+  - remove the battery
+  - reinsert
+  - sim tray
+  - ejector
+
+# Gestures that are AMBIGUOUS on their own and therefore never trigger gate [0] by
+# themselves. Kept as data so the distinction is visible rather than implied by absence.
+# "Press and hold the Power button" is physical because of the button, not the holding;
+# "Touch and hold the Wi-Fi icon" is an ordinary touchscreen interaction.
+hold_gestures:
   - press and hold
   - touch and hold
   - hold both
-  - side button
-  - power button
-  - volume down
-  - volume up
-  - hardware key
-  - remove the battery
-  - reinsert
 
 # --- device operations: forces deeplink = null regardless of step WORDING ---
 # physical_interaction above keys on how a step is phrased ("press and hold the Power

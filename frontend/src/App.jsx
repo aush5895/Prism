@@ -3,6 +3,7 @@ import { API_BASE, fetchSamples, troubleshoot } from './api.js'
 import {
   EnrichmentPanel, GroundingPanel, PlanPanel, ResolverPanel, TelemetryPanel,
 } from './panels.jsx'
+import { CustomerView } from './customer.jsx'
 
 export default function App() {
   const [samples, setSamples] = useState([])
@@ -15,14 +16,19 @@ export default function App() {
   // Kept so the telemetry panel can state the cache speed-up as a measured ratio
   // rather than a claim. Reset whenever the complaint changes.
   const [lastColdMs, setLastColdMs] = useState(null)
+  // Customer view is the default: the product is the plan, not the instrumentation.
+  const [view, setView] = useState('customer')
 
   useEffect(() => {
     fetchSamples()
       .then((data) => {
         setSamples(data.samples)
-        if (data.samples.length) {
-          setSelected(data.samples[0].id)
-          setQuery(data.samples[0].query)
+        // row_21 is the strongest first impression: a full ten-action plan with real
+        // deeplinks. row_1 comes first in the file but is the deliberate no-match case.
+        const first = data.samples.find((s) => s.id === 'row_21') || data.samples[0]
+        if (first) {
+          setSelected(first.id)
+          setQuery(first.query)
         }
       })
       .catch((e) => setError(`Cannot reach the API at ${API_BASE}. Is it running? (${e.message})`))
@@ -89,6 +95,14 @@ export default function App() {
         <h1>Smart Guided Troubleshooting Engine</h1>
         <span className="sub">Samsung PRISM GenAI Hackathon · Theme 02</span>
         <span className="spacer" />
+        <div className="viewtoggle">
+          <button className={view === 'customer' ? 'on' : ''} onClick={() => setView('customer')}>
+            Customer view
+          </button>
+          <button className={view === 'engineer' ? 'on' : ''} onClick={() => setView('engineer')}>
+            Engineer view
+          </button>
+        </div>
         <span className="sub mono">{API_BASE}</span>
       </header>
 
@@ -111,13 +125,16 @@ export default function App() {
         </button>
       </div>
       <p className="hint">
-        Run once to see the cold path, then reword the complaint and run again: the same
-        article with a different phrasing should be answered from cache.
+        {view === 'customer'
+          ? 'This is what a customer would see. Switch to the engineer view to see how every step and every link was chosen.'
+          : 'Run once to see the cold path, then reword the complaint and run again: the same article with a different phrasing should be answered from cache.'}
       </p>
 
       {error && <div className="err">{error}</div>}
 
-      {result && (
+      {result && view === 'customer' && <CustomerView envelope={result.envelope} />}
+
+      {result && view === 'engineer' && (
         <div className="panels">
           <EnrichmentPanel query={result.envelope.query} enrichment={result.debug.enrichment} />
           <TelemetryPanel
@@ -135,7 +152,7 @@ export default function App() {
             />
           ) : (
             <section className="panel">
-              <h2><span className="n">2</span> Grounding</h2>
+              <h2><span className="n">2</span> Where each step came from</h2>
               <p className="empty">
                 Served from cache — grounding and extraction did not run. Change the
                 article to see this panel populated.

@@ -80,6 +80,15 @@ held-out split, so the experiment is cheap to run when there is time to run it p
   never rejects the answer and the candidates it does reject were outranked anyway. Its
   value is demonstrated by a production regression test
   (`test_factory_reset_trap_is_never_emitted`), not by the ablation table.
+- **The margin gate refuses to choose between entries that are equivalent anyway.** When
+  the top two candidates share a `(message, originalType)` class, either answer is correct
+  by definition, but gate [5] sees a near-zero score gap and abstains. Closing up compound
+  names made this slightly more common — the four `Auto-Sync` gold cases now abstain with
+  `margin_0.000`, because merging "Auto-Sync" into one token made the duplicate entries
+  score identically. Net effect on the gold set was one case moving from correct to
+  abstained (766 to 765), never to wrong. Skipping the margin test when the tied
+  candidates are in one equivalence class is the obvious fix and the harness can measure
+  it.
 - **54 catalog message classes are not separable at all.** `View Notification Settings`
   covers 21 different screens, distinguishable only by `description`, which gate [3]
   deliberately does not read. Those cases are scored against the whole equivalence class
@@ -168,6 +177,21 @@ overstate it.
   `performance`, while "s22 touch screen is super laggy and slow to react" reads as
   `display`, and the second was refused the first's cached plan. This is part of the 4
   points of hit rate the guard costs.
+
+### 2.5 Presentation constraints visible in the customer view
+
+- **Descriptions are truncated mid-phrase.** Guide §4.1 caps `description` at 5–7 words
+  after the "It will" prefix and `validate.repair_description` enforces it, so a model
+  sentence longer than that is clamped: "It will remove physical obstructions that may
+  interfere with" simply stops. The cap is the contract's, not ours, and the alternative
+  is failing validation, but it reads poorly to a customer.
+- **A Settings action can be badged "Do this by hand".** The emitted category is
+  rule-derived, and an action whose steps navigate to a Settings screen without saying
+  which way to set the toggle is deliberately not treated as `auto` — gate [2] will not
+  guess a polarity. On row_21 that makes "Adjust Touch Sensitivity" a manual card with no
+  button, even though its steps are a Settings path. That is the safe direction (no
+  guessed deeplink) but it looks inconsistent beside "Disable Touch Sensitivity", which
+  does carry one.
 
 ### 2.5 Extraction
 

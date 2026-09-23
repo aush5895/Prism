@@ -30,8 +30,16 @@ def action_text(action: ExtractedAction) -> str:
 
 
 def is_physical(action: ExtractedAction) -> bool:
-    """Hardware-button or hands-on sequence: can never be a Settings screen, so it can
-    never carry a deeplink even when the category is `critical` (gate [0])."""
+    """Names a hardware control, or is inherently hands-on: can never be a Settings
+    screen, so it can never carry a deeplink even when the category is `critical`
+    (gate [0]).
+
+    Deliberately keyed on WHAT is operated, not HOW. A long-press is a hardware
+    interaction when it lands on the Power button and an ordinary touchscreen gesture when
+    it lands on the Wi-Fi icon, so `hold_gestures` is not consulted here — see the note in
+    data/lexicons/action_lexicons.yaml. Gate [0] tests the whole action, so treating a
+    bare gesture as physical cost every other step group in that action its deeplink.
+    """
     return contains_any(action_text(action), load_lexicons()["physical_interaction"]) is not None
 
 

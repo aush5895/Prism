@@ -48,7 +48,8 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-Open <http://localhost:5173>, pick a supplied complaint, press **Run**. Press **Run**
+Open <http://localhost:5173> and press **Run**. It opens on the customer view with
+`row_21` selected, which is the fullest plan in the supplied set. Press **Run**
 again with the same text to see the cache fast path (cold ~8000 ms → hit ~1 ms), or
 reword the complaint first to exercise the semantic tier.
 
@@ -165,8 +166,15 @@ semantic cache and its swappable embedding backend).
 
 ## The demo UI
 
-Five panels, mapping to the five things worth showing. It calls the API and reimplements
-nothing — every number, verdict and span it draws is computed server-side.
+Two views, toggled in the header. It calls the API and reimplements nothing — every
+number, verdict and span it draws is computed server-side.
+
+**Customer view (default)** is the product: the plan and nothing else. Each action is a
+card with its steps, a plain-words badge ("Settings change" / "Do this by hand" /
+"Last resort"), and where a deeplink exists, a button naming the screen it opens
+("Open Touch sensitivity"). No scores, no catalog ids, no gate names.
+
+**Engineer view** is everything below, for showing how the answer was reached.
 
 1. **Query & enrichment** — the raw complaint and the slots `enrich.py` produced: device,
    domain, symptoms, and the canonical query that is the cache key.

@@ -37,6 +37,22 @@ from typing import Iterable, List, Set
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 
+# Hyphens and underscores are dropped BEFORE splitting, so a compound name tokenises the
+# same however it happens to be written.
+#
+# REGRESSION this fixes: "Wi-Fi" tokenised to ["wi", "fi"] and "WiFi" to ["wifi"], two
+# sets that never intersect. The step "Navigate to Settings, tap Connections, and then tap
+# Wi-Fi." ranked DL-0308 "View WiFi Settings" at BM25 0.77 and then killed it at gate [4]
+# with coverage 0.00, because the candidate's only content token was "wifi" and the step
+# contained no such token. 29 catalog entries carry a compound or hyphenated name
+# (WiFi, Bluetooth, SmartThings, eSIM, Auto-Sync, ...), and every one was unreachable from
+# the spelling an article happens to use.
+#
+# This is applied inside the shared tokeniser, so BOTH sides get it: the BM25 index, the
+# candidate's message and the step text. Normalising one side only would just move the
+# mismatch.
+_JOINERS = re.compile(r"[-_]")
+
 # Generic interaction verbs + the verbs every catalog `message` starts with.
 UI_VERBS: Set[str] = {
     "tap", "click", "press", "hold", "touch", "select", "choose", "open", "opens",
@@ -59,8 +75,12 @@ _NOISE = UI_VERBS | STOPWORDS
 
 
 def tokens(s: str | None) -> List[str]:
-    """Lowercased alphanumeric runs. No stemming — the catalog is already normalized."""
-    return _TOKEN_RE.findall((s or "").lower())
+    """Lowercased alphanumeric runs, with hyphens and underscores closed up first.
+
+    No stemming — the catalog is already normalized. The joiner strip is what makes
+    "Wi-Fi", "WiFi" and "wi_fi" a single token; see _JOINERS.
+    """
+    return _TOKEN_RE.findall(_JOINERS.sub("", (s or "").lower()))
 
 
 def content(s: str | None) -> List[str]:
