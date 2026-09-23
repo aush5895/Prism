@@ -171,8 +171,14 @@ number, verdict and span it draws is computed server-side.
 
 **Customer view (default)** is the product: the plan and nothing else. Each action is a
 card with its steps, a plain-words badge ("Settings change" / "Do this by hand" /
-"Last resort"), and where a deeplink exists, a button naming the screen it opens
-("Open Touch sensitivity"). No scores, no catalog ids, no gate names.
+"Last resort"), and where a deeplink exists, a button naming the screen and the direction
+("Turn on Touch sensitivity"). No scores, no gate names.
+
+The catalog's URIs are **masked placeholders** and cannot launch anything — that is
+Samsung's own `_readme`, and the graded task is to copy the right one verbatim. So the
+button does not claim to open a screen. Clicking it expands the verbatim URI, the catalog
+entry it came from, the link type and the validation deeplink, and copies the URI, which
+demonstrates the catalog integrity actually being claimed.
 
 **Engineer view** is everything below, for showing how the answer was reached.
 

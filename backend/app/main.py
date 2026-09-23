@@ -118,6 +118,7 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
                     "matched_key": lookup.matched_key,
                     "source_query": lookup.source_query,
                 }
+                debug_sink["catalog_ids"] = _catalog_ids_for(lookup.plan.response, catalog)
             meta.cache_hit = True
             meta.cost_usd = 0.0
             meta.model = lookup.plan.model or meta.model
@@ -178,6 +179,7 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
         # verifies them before scoring, so the UI and the confidence score read the
         # same set rather than two independent guesses.
         debug_sink["spans"] = dbg.spans
+        debug_sink["catalog_ids"] = _catalog_ids_for(response, catalog)
 
     variations = list(extraction.query_variations)[: config.VARIATIONS_MAX]
     usage = provider.last_usage()
@@ -193,6 +195,26 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
                                        model=meta.model, evidence=evidence_id)
 
     return _finish(req, variations, response, meta, timer)
+
+
+def _catalog_ids_for(response: Dict[str, Any], catalog) -> Dict[str, str]:
+    """Map every emitted URI to the catalog entry it was copied from.
+
+    The graded response cannot carry a catalog id -- schema.py has no field for one -- but
+    the demo's proof panel needs it to show the URI was taken verbatim from a real entry
+    rather than assembled. Keyed by URI rather than by position so it survives a CACHE
+    HIT, where no resolver trace exists because the resolver never ran.
+    """
+    ids: Dict[str, str] = {}
+    for context in response.get("contexts", []):
+        for action in context.get("actions", []):
+            for group in action.get("stepGroups", []):
+                deeplink = group.get("actionableDeeplink")
+                uri = (deeplink or {}).get("deeplink")
+                entry = catalog.by_uri.get(uri) if uri else None
+                if entry:
+                    ids[uri] = entry["id"]
+    return ids
 
 
 def _finish(req, variations, response, meta: Meta, timer: StageTimer) -> TroubleshootEnvelope:

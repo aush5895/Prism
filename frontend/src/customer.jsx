@@ -1,11 +1,23 @@
+import { useState } from 'react'
+
 // CUSTOMER VIEW — what the product actually is.
 //
-// The plan, and nothing else. No BM25, no gate names, no catalog ids, no coverage
-// numbers, no latency. Someone who has never seen this project should understand it in
-// ten seconds. Everything an engineer needs is one toggle away in the engineer view.
+// The plan, and nothing else. No BM25, no gate names, no coverage numbers, no latency.
+// Someone who has never seen this project should understand it in ten seconds.
+//
+// ONE HONESTY CONSTRAINT SHAPES THE BUTTON. The catalog's URIs are masked placeholders —
+// deeplinks.json's own _readme: "URIs are MASKED placeholders: match on description,
+// message, qna_description and originalType, then copy the URI verbatim." A hash like
+// bixby://masked/act/1b0d34e9b4 REPLACED the real Samsung URI. It cannot resolve on any
+// device, ever, and a desktop browser cannot handle a bixby:// scheme in any case. The
+// task was to select the right catalog entry and copy its URI verbatim, not to make it
+// launch.
+//
+// So the button does not claim to open anything. Clicking it proves what we actually did:
+// it shows the verbatim URI, the catalog entry it came from, the link type and the
+// validation deeplink, and copies the URI. A judge who clicks sees catalog integrity
+// demonstrated instead of a link that silently does nothing.
 
-// Plain words for the schema's three categories. The API still emits auto|manual|critical
-// (that enum is Samsung's and is not ours to change); this is presentation only.
 const CATEGORY_WORDS = {
   auto: { label: 'Settings change', cls: 'auto' },
   manual: { label: 'Do this by hand', cls: 'manual' },
@@ -26,25 +38,100 @@ export function screenName(message) {
   return parts.join(' ')
 }
 
-function OpenButton({ deeplink }) {
+// The button must show the DIRECTION, not just the screen. Stripping the verb alone gave
+// two adjacent cards reading "Open Touch sensitivity" for opposite actions -- the enable
+// path and the disable path are the pair the resolver works hardest to separate, and the
+// customer could not tell them apart.
+export function buttonLabel(deeplink) {
   const name = screenName(deeplink.message)
+  if (deeplink.originalType === 'onURL') return `Turn on ${name}`
+  if (deeplink.originalType === 'offURL') return `Turn off ${name}`
+  return `Open ${name}`
+}
+
+const DUMMY_URI = 'bixby://dummy_positive'
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false          // blocked outside a secure context; the panel still shows
+  }
+}
+
+function OpenButton({ deeplink, validation, catalogId }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const name = screenName(deeplink.message)
+  const label = buttonLabel(deeplink)
+  const isPlaceholder = deeplink.deeplink === DUMMY_URI
+
+  async function reveal() {
+    setCopied(await copyToClipboard(deeplink.deeplink))
+    setOpen((v) => !v)
+  }
+
   return (
     <div className="open-wrap">
       <button
         className="open-btn"
         type="button"
-        title={`Opens ${name} on your Galaxy device`}
-        onClick={(e) => e.currentTarget.blur()}
+        aria-expanded={open}
+        title={`Show the catalog entry behind ${name}`}
+        onClick={reveal}
       >
         <span className="open-icon" aria-hidden="true">›</span>
-        Open {name}
+        {label}
       </button>
-      <span className="open-note">Opens this screen on your phone</span>
+      <span className="open-note">Verified Samsung catalog entry — masked URI</span>
+
+      {open && (
+        <div className="proof">
+          <div className="proof-row">
+            <span className="proof-k">URI</span>
+            <code className="proof-uri">{deeplink.deeplink}</code>
+          </div>
+
+          {!isPlaceholder && (
+            <>
+              <div className="proof-row">
+                <span className="proof-k">Catalog entry</span>
+                <span>
+                  {catalogId ? <code>{catalogId}</code> : <em>—</em>}
+                  {' · '}“{deeplink.message}”
+                </span>
+              </div>
+              <div className="proof-row">
+                <span className="proof-k">Link type</span>
+                <code>{deeplink.originalType}</code>
+              </div>
+              <div className="proof-row">
+                <span className="proof-k">Validation</span>
+                <span>
+                  {validation ? (
+                    <>
+                      key <code>{validation.key}</code>
+                      {validation.value ? <> · expects <code>{validation.value}</code></> : null}
+                    </>
+                  ) : <em>none for this entry</em>}
+                </span>
+              </div>
+            </>
+          )}
+
+          <p className="proof-note">
+            {isPlaceholder
+              ? 'No catalog entry exists for this screen. Placeholder, per Samsung’s catalog rules.'
+              : `${copied ? 'Copied. ' : ''}Masked catalog URI — resolves to this screen on a Galaxy device.`}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
 
-export function CustomerView({ envelope }) {
+export function CustomerView({ envelope, catalogIds = {} }) {
   const context = envelope?.response?.contexts?.[0]
 
   if (!context) {
@@ -69,8 +156,8 @@ export function CustomerView({ envelope }) {
       </header>
 
       {context.actions.map((action, i) => {
-        // Badge from the emitted `category` ONLY. Never from deeplink presence: an
-        // auto action whose screen could not be resolved is still a Settings change, and
+        // Badge from the emitted `category` ONLY. Never from deeplink presence: an auto
+        // action whose screen could not be resolved is still a Settings change, and
         // badging it "Do this by hand" would contradict its own steps.
         const words = CATEGORY_WORDS[action.category] || CATEGORY_WORDS.manual
         return (
@@ -94,15 +181,21 @@ export function CustomerView({ envelope }) {
                   {group.steps.map((step, k) => <li key={k}>{step}</li>)}
                 </ol>
                 {group.actionableDeeplink
-                  ? <OpenButton deeplink={group.actionableDeeplink} />
+                  ? (
+                    <OpenButton
+                      deeplink={group.actionableDeeplink}
+                      validation={group.validationDeeplink}
+                      catalogId={catalogIds[group.actionableDeeplink.deeplink]}
+                    />
+                  )
                   : action.category === 'auto' && (
-                      // A Settings action we could not link: the resolver declined to
-                      // guess which screen or which way to set it. Say so plainly rather
-                      // than leave a card that looks like it is missing its button.
-                      <p className="cust-selfserve">
-                        Open Settings yourself — we could not tell which way to set this.
-                      </p>
-                    )}
+                    // A Settings action we could not link: the resolver declined to guess
+                    // which screen or which way to set it. Say so plainly rather than
+                    // leave a card that looks like it is missing its button.
+                    <p className="cust-selfserve">
+                      Open Settings yourself — we could not tell which way to set this.
+                    </p>
+                  )}
               </div>
             ))}
           </article>

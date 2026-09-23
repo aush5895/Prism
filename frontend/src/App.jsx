@@ -84,6 +84,11 @@ export default function App() {
     return out
   }, [result])
 
+  // Catalog ids are not in the graded response (schema.py has no field for them), so the
+  // proof panel reads them from the debug sibling, keyed by URI. A real client would not
+  // have this; the demo does, and demonstrating it is the panel's whole job.
+  const catalogIds = result?.debug?.catalog_ids || {}
+
   const markedSpans = useMemo(
     () => steps.filter((s) => s.span).map((s) => ({ ...s.span, key: s.key })),
     [steps],
@@ -132,7 +137,9 @@ export default function App() {
 
       {error && <div className="err">{error}</div>}
 
-      {result && view === 'customer' && <CustomerView envelope={result.envelope} />}
+      {result && view === 'customer' && (
+        <CustomerView envelope={result.envelope} catalogIds={catalogIds} />
+      )}
 
       {result && view === 'engineer' && (
         <div className="panels">

@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from app.contracts import TroubleshootRequest
 from app.llm.replay import ReplayProvider
 from app.main import app, run_pipeline
+from app.pipeline.deeplinks import get_catalog
 from app.pipeline.spans import locate
 from app.schema_samsung import ContextDeeplinkResponse
 from app.text import content, tokens
@@ -87,6 +88,53 @@ def test_every_rejected_candidate_carries_a_verdict_and_its_intent(debug_run):
         assert reject["verdict"].startswith("reject:")
         assert reject["intent"] in {"ON", "OFF", "VIEW", "UPDATE"}
         assert reject["message"] and reject["catalog_id"]
+
+
+def test_catalog_ids_prove_every_emitted_uri_came_from_the_catalog(debug_run):
+    """The demo's proof panel claims each URI was copied verbatim from a real entry.
+
+    The graded response cannot carry a catalog id (schema.py has no field for one), so
+    the id is exposed on the debug sibling, keyed by URI. Keyed by URI and not by
+    position so it survives a cache hit, where no resolver trace exists at all.
+    """
+    envelope, debug = debug_run
+    ids = debug["catalog_ids"]
+    assert ids, "row_21 emits deeplinks, so ids must be present"
+
+    catalog = get_catalog()
+    emitted = [g["actionableDeeplink"] for a in envelope.response["contexts"][0]["actions"]
+               for g in a["stepGroups"] if g["actionableDeeplink"]]
+    for deeplink in emitted:
+        uri = deeplink["deeplink"]
+        assert uri in ids, f"{uri} emitted without a catalog id"
+        entry = catalog.by_id[ids[uri]]
+        assert entry["deeplink"] == uri
+        # the placeholder's prose is authored per the catalog's own rule; everything
+        # else must match the catalog field for field
+        if uri != "bixby://dummy_positive":
+            assert entry["message"] == deeplink["message"]
+            assert entry["originalType"] == deeplink["originalType"]
+
+
+def test_catalog_ids_survive_a_cache_hit(row21):
+    """A cached plan never runs the resolver, so the trace is gone -- but the proof panel
+    must still be able to name the entry behind each URI."""
+    from app.pipeline.cache import reset_cache
+
+    reset_cache()
+    request = TroubleshootRequest(query=row21["original_query"],
+                                  siis_response=row21["siis_response"])
+    provider = ReplayProvider(FIXTURES / "extraction_row21.json")
+
+    cold: dict = {}
+    run_pipeline(request, provider=provider, debug_sink=cold)
+    warm: dict = {}
+    envelope = run_pipeline(request, provider=provider, debug_sink=warm)
+
+    assert envelope.meta.cache_hit is True
+    assert "resolutions" not in warm, "a cache hit runs no resolver"
+    assert warm["catalog_ids"] == cold["catalog_ids"]
+    reset_cache()
 
 
 # ----------------------------------------------------------------- span honesty

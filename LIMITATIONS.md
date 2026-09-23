@@ -178,6 +178,29 @@ overstate it.
   `display`, and the second was refused the first's cached plan. This is part of the 4
   points of hit rate the guard costs.
 
+### 2.5 The catalog URIs are masked and cannot launch anything
+
+`deeplinks.json`'s own `_readme`: *"URIs are MASKED placeholders: match on description,
+message, qna_description and originalType, then copy the URI verbatim."* A URI like
+`bixby://masked/act/1b0d34e9b4` is a hash that REPLACED the real Samsung URI. It cannot
+resolve on any device, and a desktop browser cannot handle a `bixby://` scheme in any
+case. The graded task is selecting the right catalog entry and copying its URI verbatim —
+not making it launch.
+
+The demo UI used to caption its button "Opens this screen on your phone", which promised
+something impossible: a judge clicking it would see nothing happen and reasonably conclude
+the headline feature was broken. The caption now reads "Verified Samsung catalog entry —
+masked URI", and clicking expands a panel showing the verbatim URI, the catalog id and
+message it was copied from, the link type, and the validation deeplink — and copies the
+URI. The click now demonstrates catalog integrity, which is the thing actually claimed.
+
+For `bixby://dummy_positive` the panel says instead: "No catalog entry exists for this
+screen. Placeholder, per Samsung's catalog rules."
+
+The catalog id is not in the graded response, because `schema.py` has no field for one. It
+reaches the panel on the debug sibling, keyed by URI so it survives a cache hit where no
+resolver trace exists. A production client would not have it.
+
 ### 2.5 Descriptions are padded to reach Samsung's word floor
 
 Guide §4.1 requires 5–7 words, and Phase 0 resolved ambiguity **A4** to mean 5–7 words
