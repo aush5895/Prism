@@ -237,7 +237,11 @@ def samples() -> Dict[str, Any]:
     """The supplied SIIS rows, so the demo UI can offer a complaint to run without a
     human pasting a 5 KB article into a textarea. Reference DATA, read from data/."""
     rows = json.loads(config.SIIS_PATH.read_text(encoding="utf-8"))["responses"]
+    # `device` is enrich.py's own parse of the complaint, carried so the entry screen can
+    # show the detected model without a JS reimplementation of _DEVICE. It is the same
+    # value stage [0] computes at request time; nothing downstream reads it from here.
     return {"samples": [{"id": r["id"], "query": r["original_query"],
+                         "device": enrich(r["original_query"]).device,
                          "siis_response": r["siis_response"]} for r in rows]}
 
 

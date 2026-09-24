@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 // CUSTOMER VIEW — what the product actually is.
 //
@@ -17,6 +17,11 @@ import { useState } from 'react'
 // it shows the verbatim URI, the catalog entry it came from, the link type and the
 // validation deeplink, and copies the URI. A judge who clicks sees catalog integrity
 // demonstrated instead of a link that silently does nothing.
+//
+// THE SAME RULE GOVERNS EVERY LABEL ON THIS SCREEN. Nothing here may imply a capability
+// the system does not have: no connected device, no telemetry, no sync state. The device
+// chip says "simulated" and the model on the entry card is enrich.py's parse of the
+// complaint text, passed in — it is never inferred in JS.
 
 const CATEGORY_WORDS = {
   auto: { label: 'Settings change', cls: 'auto' },
@@ -51,6 +56,16 @@ export function buttonLabel(deeplink) {
 
 const DUMMY_URI = 'bixby://dummy_positive'
 
+// Chip text is the supplied complaint itself, shortened at a word boundary — never a
+// rewrite of it. The full text is on the title attribute and lands in the textarea.
+export function chipLabel(query, max = 40) {
+  const clean = query.trim().replace(/^\d+\.\s*/, '').replace(/^["“]/, '')
+  if (clean.length <= max) return clean
+  const cut = clean.slice(0, max)
+  const space = cut.lastIndexOf(' ')
+  return `${(space > 20 ? cut.slice(0, space) : cut).replace(/[,.;:]$/, '')}…`
+}
+
 async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text)
@@ -60,8 +75,117 @@ async function copyToClipboard(text) {
   }
 }
 
-function OpenButton({ deeplink, validation, catalogId }) {
-  const [open, setOpen] = useState(false)
+// --------------------------------------------------------------------------- beat 1
+export function EntryCard({
+  query, setQuery, samples, selected, onPick, onSubmit, detected, disabled,
+}) {
+  const chars = query.length
+  const [showAll, setShowAll] = useState(false)
+
+  // All twenty are reachable, but twenty full-width chips bury the textarea. Six, with
+  // the selected one pinned first so it is never hidden behind the toggle.
+  const shown = showAll
+    ? samples
+    : [...samples.filter((s) => s.id === selected),
+       ...samples.filter((s) => s.id !== selected)].slice(0, 6)
+
+  return (
+    <section className="card entry">
+      <div className="eyebrow">Active session</div>
+      <h1>What&rsquo;s wrong with your device?</h1>
+      <p className="entry-sub">
+        Describe it in your own words. We parse the complaint and match every step against
+        the Samsung service record supplied with it — nothing outside those records is
+        suggested.
+      </p>
+
+      <textarea
+        className="entry-input"
+        value={query}
+        rows={5}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="For example: my screen goes black whenever I open the camera"
+        aria-label="Describe the problem"
+      />
+
+      <div className="entry-foot">
+        <span className="counter">{chars} character{chars === 1 ? '' : 's'}</span>
+        <button
+          type="button"
+          className="cta"
+          onClick={onSubmit}
+          disabled={disabled || !query.trim()}
+        >
+          Analyze Issue <span aria-hidden="true">→</span>
+        </button>
+      </div>
+
+      <div className="try">
+        <div className="try-label">Try saying:</div>
+        <div className="chips">
+          {shown.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`chip${s.id === selected ? ' on' : ''}`}
+              title={s.query}
+              onClick={() => onPick(s.id)}
+            >
+              {chipLabel(s.query)}
+            </button>
+          ))}
+          {samples.length > shown.length && (
+            <button type="button" className="chip more" onClick={() => setShowAll(true)}>
+              +{samples.length - shown.length} more
+            </button>
+          )}
+        </div>
+        <p className="try-note">
+          The {samples.length} complaints supplied with the Samsung kit, verbatim —
+          shortened here, sent in full.
+        </p>
+      </div>
+
+      <div className="devcard">
+        <span className="devcard-glyph" aria-hidden="true" />
+        <div className="devcard-body">
+          <div className="devcard-model">
+            {detected.parsed
+              ? (detected.device || 'No model named')
+              : 'Model not read yet'}
+          </div>
+          <div className="devcard-note">
+            {detected.parsed && !detected.device
+              ? 'nothing in your description names a model, so we do not assume one'
+              : 'detected from your description'}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// --------------------------------------------------------------------------- beat 2
+export function AnalyzingCard({ query }) {
+  return (
+    <section className="card analyzing" aria-live="polite">
+      <div className="eyebrow">Active session</div>
+      <h1>Working on it</h1>
+      <p className="entry-sub">Reading the supplied service record for this complaint.</p>
+      <blockquote className="analyzing-q">{query}</blockquote>
+      <div className="analyzing-bar"><span /></div>
+      <ul className="analyzing-stages">
+        <li>Normalising the complaint into slots</li>
+        <li>Grounding it in the supplied article</li>
+        <li>Extracting the steps the article actually states</li>
+        <li>Resolving each Settings screen against the catalog</li>
+      </ul>
+    </section>
+  )
+}
+
+// --------------------------------------------------------------------------- beat 5
+function OpenButton({ deeplink, validation, catalogId, open, onToggle }) {
   const [copied, setCopied] = useState(false)
   const name = screenName(deeplink.message)
   const label = buttonLabel(deeplink)
@@ -69,7 +193,7 @@ function OpenButton({ deeplink, validation, catalogId }) {
 
   async function reveal() {
     setCopied(await copyToClipboard(deeplink.deeplink))
-    setOpen((v) => !v)
+    onToggle()
   }
 
   return (
@@ -131,19 +255,75 @@ function OpenButton({ deeplink, validation, catalogId }) {
   )
 }
 
-export function CustomerView({ envelope, catalogIds = {} }) {
+// --------------------------------------------------------------------- beats 3, 4, 6
+export function CustomerView({ envelope, catalogIds = {}, focus = null, onRestart }) {
   const context = envelope?.response?.contexts?.[0]
+  const actions = context?.actions || []
+
+  // One proof panel open at a time, held here rather than inside the button, because the
+  // "Resolution Verify" beat has to be able to open one from the progress strip.
+  const [openKey, setOpenKey] = useState(null)
+  const cardRefs = useRef({})
+
+  // The first group that resolved to a link: the one the verify beat opens. Placeholder
+  // URIs count, since their proof panel is exactly where we say a screen has no entry.
+  const firstLink = useMemo(() => {
+    for (let i = 0; i < actions.length; i += 1) {
+      const groups = actions[i].stepGroups || []
+      for (let j = 0; j < groups.length; j += 1) {
+        if (groups[j].actionableDeeplink) return { key: `${i}.${j}`, card: i }
+      }
+    }
+    return null
+  }, [actions])
+
+  // The honest-fallback beat opens a PLACEHOLDER proof by preference: bixby://dummy_positive
+  // is the engine saying "this screen has no catalog entry and I will not invent one",
+  // and that panel is the only place it says so in words.
+  const firstPlaceholder = useMemo(() => {
+    for (let i = 0; i < actions.length; i += 1) {
+      const groups = actions[i].stepGroups || []
+      for (let j = 0; j < groups.length; j += 1) {
+        if (groups[j].actionableDeeplink?.deeplink === DUMMY_URI) {
+          return { key: `${i}.${j}`, card: i }
+        }
+      }
+    }
+    return null
+  }, [actions])
+
+  const target = focus === 'fallback' ? firstPlaceholder || firstLink : firstLink
+  const focusCard = focus === 'detail' ? 0
+    : (focus === 'verify' || focus === 'fallback') ? target?.card ?? 0
+      : null
+
+  useEffect(() => {
+    if (focus === 'verify' || focus === 'fallback') setOpenKey(target ? target.key : null)
+    else if (focus === 'detail') setOpenKey(null)
+  }, [focus, target])
+
+  useEffect(() => {
+    if (focusCard === null) return
+    const node = cardRefs.current[focusCard]
+    if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [focusCard, focus])
 
   if (!context) {
     return (
       <div className="cust">
-        <div className="cust-empty">
+        <section className="card cust-empty">
+          <div className="eyebrow">Active session</div>
           <h2>No confirmed fix for this one</h2>
           <p>
             We could not find steps we are confident about for this problem, so we are not
             guessing. Contact Samsung Support and they can take it further.
           </p>
-        </div>
+          {onRestart && (
+            <button type="button" className="linkish" onClick={onRestart}>
+              Describe a different problem
+            </button>
+          )}
+        </section>
       </div>
     )
   }
@@ -151,17 +331,27 @@ export function CustomerView({ envelope, catalogIds = {} }) {
   return (
     <div className="cust">
       <header className="cust-head">
+        <div className="eyebrow">Your plan</div>
         <h2>{context.title}</h2>
         <p>Try these in order. Stop as soon as the problem goes away.</p>
+        {onRestart && (
+          <button type="button" className="linkish" onClick={onRestart}>
+            ← Describe a different problem
+          </button>
+        )}
       </header>
 
-      {context.actions.map((action, i) => {
+      {actions.map((action, i) => {
         // Badge from the emitted `category` ONLY. Never from deeplink presence: an auto
         // action whose screen could not be resolved is still a Settings change, and
         // badging it "Do this by hand" would contradict its own steps.
         const words = CATEGORY_WORDS[action.category] || CATEGORY_WORDS.manual
         return (
-          <article className="cust-card" key={i}>
+          <article
+            className={`card cust-card${focusCard === i ? ' is-focus' : ''}`}
+            key={i}
+            ref={(node) => { cardRefs.current[i] = node }}
+          >
             <div className="cust-card-head">
               <span className="cust-num">{i + 1}</span>
               <h3>{action.actionName}</h3>
@@ -186,6 +376,10 @@ export function CustomerView({ envelope, catalogIds = {} }) {
                       deeplink={group.actionableDeeplink}
                       validation={group.validationDeeplink}
                       catalogId={catalogIds[group.actionableDeeplink.deeplink]}
+                      open={openKey === `${i}.${j}`}
+                      onToggle={() => setOpenKey(
+                        (prev) => (prev === `${i}.${j}` ? null : `${i}.${j}`),
+                      )}
                     />
                   )
                   : action.category === 'auto' && (

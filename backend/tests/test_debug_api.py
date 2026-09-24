@@ -17,6 +17,7 @@ from app.contracts import TroubleshootRequest
 from app.llm.replay import ReplayProvider
 from app.main import app, run_pipeline
 from app.pipeline.deeplinks import get_catalog
+from app.pipeline.enrich import enrich
 from app.pipeline.spans import locate
 from app.schema_samsung import ContextDeeplinkResponse
 from app.text import content, tokens
@@ -196,6 +197,24 @@ def test_samples_endpoint_serves_the_supplied_rows():
         payload = client.get("/v1/samples").json()
     assert len(payload["samples"]) == 20
     assert all({"id", "query", "siis_response"} <= set(s) for s in payload["samples"])
+
+
+def test_samples_carry_enrich_pys_device_and_never_invent_one():
+    """The entry card prints a detected model, so the model must be the pipeline's.
+
+    Observed while building the customer entry screen: the only other way to show a
+    device before a run is to re-implement enrich._DEVICE in JavaScript, which would
+    drift from stage [0] and could print a model the pipeline never parsed. The field is
+    carried on the sample instead, and a row that names no model must stay null rather
+    than fall back to anything.
+    """
+    with TestClient(app) as client:
+        samples = client.get("/v1/samples").json()["samples"]
+    for sample in samples:
+        assert sample["device"] == enrich(sample["query"]).device
+    by_id = {s["id"]: s for s in samples}
+    assert by_id["row_2"]["device"] == "Galaxy S22"
+    assert by_id["row_7"]["device"] is None
 
 
 def test_debug_endpoint_returns_envelope_and_debug_as_siblings(row21):
