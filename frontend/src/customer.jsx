@@ -208,7 +208,15 @@ function OpenButton({ deeplink, validation, catalogId, open, onToggle }) {
         <span className="open-icon" aria-hidden="true">›</span>
         {label}
       </button>
-      <span className="open-note">Verified Samsung catalog entry — masked URI</span>
+      {/* This note must agree with the proof panel below it. It used to read "Verified
+          Samsung catalog entry" for every button, including the ones carrying
+          bixby://dummy_positive -- so a placeholder card claimed a verified entry in the
+          sub-label and admitted it had none two lines lower, in the same card. */}
+      <span className="open-note">
+        {isPlaceholder
+          ? 'No catalog entry for this screen — placeholder URI'
+          : 'Verified Samsung catalog entry — masked URI'}
+      </span>
 
       {open && (
         <div className="proof">

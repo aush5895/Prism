@@ -490,6 +490,9 @@ body[data-view="customer"] { background: var(--c-bg); color: var(--c-text); }
 
 @media (max-width: 720px) {
   .app--customer { padding: 0 16px 40px; }
+  /* flex:1 on the list pushes the beats to the right edge once they wrap */
+  .beats { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .beats ol { flex: none; }
   .entry, .analyzing { padding: 26px 20px 24px; }
   .cust-card { padding: 20px 18px; }
   .cust-why, .cust-group { margin-left: 0; }
