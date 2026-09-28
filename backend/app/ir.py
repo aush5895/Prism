@@ -33,11 +33,26 @@ class ExtractedAction(BaseModel):
     source_span: Optional[Tuple[int, int]] = None
 
 
+class ComplaintIssue(BaseModel):
+    """One problem the customer described, and whether the article addresses it.
+
+    `covered` is the model's CLAIM. It is only believed once pipeline/article_fit.py has
+    found `evidence` in the article: the model can say "yes", but it has to quote the
+    sentence that proves it, and the quote has to be there.
+    """
+    issue: str
+    covered: bool = False
+    evidence: str = ""
+
+
 class Extraction(BaseModel):
     goal_topic: str
     title: str
     actions: List[ExtractedAction] = Field(default_factory=list)
     query_variations: List[str] = Field(default_factory=list)
+    # Empty from providers that cannot judge coverage (the offline stub, recordings made
+    # before this field existed). Empty means "unknown", never "covered".
+    complaint_issues: List[ComplaintIssue] = Field(default_factory=list)
 
 
 class EnrichedQuery(BaseModel):

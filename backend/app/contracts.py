@@ -45,6 +45,10 @@ class Meta(BaseModel):
     fallback: Optional[str] = None
     stage_latency_ms: Dict[str, float] = Field(default_factory=dict)
     warnings: List[str] = Field(default_factory=list)
+    # Does the supplied article cover each problem the customer described? Computed by
+    # pipeline/article_fit.py; a sibling of `response`, never inside it. None when the
+    # pipeline did not run extraction (no article supplied).
+    article_fit: Optional[Dict[str, Any]] = None
 
 
 class TroubleshootEnvelope(BaseModel):

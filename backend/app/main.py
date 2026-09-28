@@ -20,7 +20,7 @@ from .contracts import (FALLBACK_NO_MATCH, FALLBACK_NO_SIIS_CONTEXT,
                         FALLBACK_SCHEMA_REPAIR_EXHAUSTED, Meta, TroubleshootEnvelope,
                         TroubleshootRequest)
 from .llm import get_provider
-from .pipeline import assemble, ground, validate
+from .pipeline import article_fit, assemble, ground, validate
 from .pipeline.cache import evidence_key, get_cache
 from .pipeline.deeplinks import get_catalog
 from .pipeline.enrich import enrich
@@ -124,6 +124,11 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
                 _replay_grounding(debug_sink, lookup.plan, get_cache())
             meta.cache_hit = True
             meta.cost_usd = 0.0
+            # The fit was judged on the cold run, for the same article (a hit requires
+            # it) and a complaint close enough to share the plan. Marked as replayed.
+            cached_fit = (lookup.plan.grounding or {}).get("article_fit")
+            if cached_fit:
+                meta.article_fit = {**cached_fit, "from_cache": True}
             meta.model = lookup.plan.model or meta.model
             return _finish(req, list(lookup.plan.query_variations), lookup.plan.response,
                            meta, timer)
@@ -140,6 +145,10 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
 
     with timer.stage("alignment"):
         alignment = ground.evidence_alignment(req.query, evidence)
+
+    with timer.stage("article_fit"):
+        fit = article_fit.assess(extraction, evidence.text)
+    meta.article_fit = fit
 
     with timer.stage("resolve_and_order"):
         response, dbg = assemble.build_response(extraction, enriched, evidence, catalog, alignment)
@@ -179,6 +188,7 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
                         "deeplink_precision": dbg.deeplink_precision,
                         "evidence_alignment": dbg.evidence_alignment},
         "spans": dbg.spans,
+        "article_fit": fit,
     }
 
     if debug_sink is not None:
@@ -190,6 +200,7 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
         debug_sink["resolutions"] = dbg.resolutions
         debug_sink["score_terms"] = grounding["score_terms"]
         debug_sink["spans"] = dbg.spans
+        debug_sink["article_fit"] = fit
         debug_sink["catalog_ids"] = _catalog_ids_for(response, catalog)
 
     variations = list(extraction.query_variations)[: config.VARIATIONS_MAX]
@@ -227,6 +238,7 @@ def _replay_grounding(debug_sink: Dict[str, Any], plan, cache) -> None:
     debug_sink["resolutions"] = grounding["resolutions"]
     debug_sink["score_terms"] = grounding["score_terms"]
     debug_sink["spans"] = grounding["spans"]
+    debug_sink["article_fit"] = grounding.get("article_fit")
     debug_sink["grounding_from"] = {"cold_run_query": plan.source_query,
                                     "stored_at": plan.stored_at}
 

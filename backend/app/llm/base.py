@@ -34,6 +34,12 @@ STRUCTURE
 - description: begins "It will" and states the concrete benefit in a complete phrase of 5 to 7 words AFTER "It will" (count them; 4 is too few). End the phrase at that length rather than writing a longer sentence, and never end on a preposition or conjunction. Good: "It will stop gestures from misreading taps". Bad: "It will improve touch response" (4 words), "It will remove obstructions that interfere with" (trails off).
 - title: 2 to 3 words naming the core issue, sentence case.
 - goal_topic: 1 to 3 words naming the topic, Title Case.
+COMPLAINT COVERAGE
+- complaint_issues: list each distinct problem the customer describes, 1 to 4 items, each a short phrase in the customer's own terms. One symptom is one item; do not split a single symptom into several.
+- covered: true ONLY if the reference text gives steps that address that specific problem. A related topic is not enough: an article about a different feature, a different symptom or a different part of the device does not cover it.
+- evidence: when covered is true, copy ONE sentence from the reference text, character for character, that addresses the problem. When covered is false, return an empty string.
+- Judge this honestly even when the answer is no, and do not stretch the article to fit. It is reported to the customer and to the support agent, separately from the plan.
+
 - query_variations: 8 to 10 distinct paraphrases of the USER COMPLAINT. These are what the NEXT user might type, so most must be full sentences that still name the device and the symptom, not search keywords. Vary the register: formal, casual, frustrated, typo-inclusive, and AT MOST two keyword-only. A list of bare keywords like "screen lag" / "touch delay" is wrong: it drops the device and the context, and two such paraphrases are indistinguishable from each other.
 """
 
@@ -54,6 +60,18 @@ EXTRACTION_JSON_SCHEMA: Dict[str, Any] = {
         "goal_topic": {"type": "string"},
         "title": {"type": "string"},
         "query_variations": {"type": "array", "items": {"type": "string"}},
+        "complaint_issues": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "issue": {"type": "string"},
+                    "covered": {"type": "boolean"},
+                    "evidence": {"type": "string"},
+                },
+                "required": ["issue", "covered", "evidence"],
+            },
+        },
         "actions": {
             "type": "array",
             "items": {
@@ -93,7 +111,7 @@ EXTRACTION_JSON_SCHEMA: Dict[str, Any] = {
             },
         },
     },
-    "required": ["goal_topic", "title", "actions", "query_variations"],
+    "required": ["goal_topic", "title", "actions", "query_variations", "complaint_issues"],
 }
 
 

@@ -137,5 +137,12 @@ GUIDED_SESSION_TTL_S = int(os.getenv("PRISM_GUIDED_SESSION_TTL_S", "3600"))
 # that could test how far is too far.
 GUIDED_WARNING_WINDOW_CHARS = int(os.getenv("PRISM_GUIDED_WARNING_WINDOW_CHARS", "400"))
 GUIDED_MAX_WARNINGS = 2
+
+# ---- article fit (non-graded): does the supplied article cover what the customer said?
+ARTICLE_FIT_MAX_ISSUES = 4
+# A "covered" claim is believed only if its quoted evidence is found in the article:
+# verbatim, or failing that, a located span supporting at least this share of the quote's
+# subject words (the same measure pipeline/spans.py uses to ground steps).
+ARTICLE_FIT_MIN_SUPPORT = 0.8
 # A gate quote must be a whole sentence of at least this length; see guided._is_whole_sentence.
 GUIDED_MIN_QUOTE_CHARS = 20
