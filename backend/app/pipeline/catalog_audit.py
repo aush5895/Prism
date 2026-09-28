@@ -27,8 +27,8 @@ words and UI verbs removed) appears in the description or QnA text, after:
   - a shared stem of config.CATALOG_AUDIT_STEM_CHARS letters ("magnification" ==
     "magnifier" at 6)
 This is deliberately LENIENT: an entry is only distrusted when its label and its own
-description share nothing at all. A generic-but-honest label ("View Sound Settings" for
-"mute all sounds") passes.
+description share nothing at all. A generic but honest label passes (see the test file
+for the cases that pin this down).
 """
 from __future__ import annotations
 

@@ -77,7 +77,7 @@ Needs Python 3.11+ and Node 18+.
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python -m pytest                                              # 214 passed, 2 skipped
+python -m pytest                                              # 228 passed, 2 skipped
 python -m uvicorn app.main:app --app-dir backend --port 8000
 ```
 
@@ -85,7 +85,7 @@ python -m uvicorn app.main:app --app-dir backend --port 8000
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python -m pytest                                              # 214 passed, 2 skipped
+python -m pytest                                              # 228 passed, 2 skipped
 python -m uvicorn app.main:app --app-dir backend --port 8000
 ```
 
@@ -270,7 +270,7 @@ backend/app/
   pipeline/               enrich · cache · embeddings · ground · deeplinks ·
                           catalog_audit · ordering · spans · assemble · validate
   llm/                    base · stub (offline) · replay · gemini
-backend/tests/            214 tests; fixtures/ holds a recorded Gemini extraction
+backend/tests/            228 tests; fixtures/ holds a recorded Gemini extraction
 evaluation/               synthetic.py (gold set) · run_eval.py · scale.py · report.json
 frontend/                 React + Vite: customer view, guided mode, engineer view
 tools/                    catalog_health · demo_row21 · record_fixture_row21

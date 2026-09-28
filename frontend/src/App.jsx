@@ -164,7 +164,9 @@ export default function App() {
     if (n === 1) return setBeat(1)
     if (n === 2) return analyze()
     if (n === 6) {
-      if (guided && guided.session.status !== 'resolved') return setBeat(6)
+      // Re-open the running session only if it is for the complaint on screen now.
+      const same = guided && (guided.envelope?.query || '').trim() === query.trim()
+      if (same && guided.session.status !== 'resolved') return setBeat(6)
       return startGuided()
     }
     if (n === 7) {

@@ -337,7 +337,9 @@ def measure(scenarios: Sequence[Scenario], rng: random.Random) -> Dict[str, Any]
         "cross_article_pct": round(100.0 * cross_article / max(1, decided + misses), 1),
         "false_positive_pct": round(
             100.0 * (wrong_same_article + cross_article) / max(1, decided + misses), 1),
-        "matrix_mb": round(matrix.nbytes / 1e6, 2) if matrix is not None else 0.0,
+        # The ALLOCATION, not the view: the matrix lives in a buffer that grows by 1.5x.
+        "matrix_mb": round((cache._buf.nbytes if cache._buf is not None  # noqa: SLF001
+                            else (matrix.nbytes if matrix is not None else 0)) / 1e6, 2),
         "keys_mb": round(keys_bytes / 1e6, 2),
         "peak_traced_mb": round((peak - baseline) / 1e6, 1),
     }

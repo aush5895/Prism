@@ -463,3 +463,20 @@ def test_a_gate_quote_is_always_a_whole_sentence():
     for quote in guided.safety_notice(action, article)["quotes"]:
         assert quote[:1].isupper() and quote[-1] in ".!?", quote
         assert quote in article
+
+
+def test_a_sentence_carrying_a_url_is_dropped_not_edited():
+    """REGRESSION, found on re-review. Scrubbing the URL out of a sentence produced a quote
+    ('See  if you lose your data.') that is not in the article at all."""
+    action = {"actionName": "Factory Data Reset", "category": "critical",
+              "stepGroups": [{"steps": ["Tap Factory data reset."]}]}
+    article = ("Open Settings. Tap Factory data reset. See [the guide](https://example.com/x) "
+               "if you lose your data. Back up your personal data before you reset it.")
+    quotes = guided.safety_notice(action, article)["quotes"]
+    assert quotes == ["Back up your personal data before you reset it."]
+
+
+def test_a_short_fragment_starting_with_a_digit_is_not_a_sentence():
+    """REGRESSION, found on re-review: operator precedence let '3 erase.' through."""
+    assert guided._is_whole_sentence("3 erase.") is False
+    assert guided._is_whole_sentence("3 steps will erase all your personal data.") is True

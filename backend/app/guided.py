@@ -95,8 +95,9 @@ _SENTENCE = re.compile(r"(?:[^\n.!?]|[.!?](?=\S))+(?:[.!?](?=\s|$))?")
 def _is_whole_sentence(text: str) -> bool:
     """A quote must read as a sentence: starts with a capital or digit, ends with . ! ?"""
     text = text.strip()
-    return (len(text) >= config.GUIDED_MIN_QUOTE_CHARS and text[:1].isupper()
-            or text[:1].isdigit()) and text[-1:] in ".!?"
+    return (len(text) >= config.GUIDED_MIN_QUOTE_CHARS
+            and (text[:1].isupper() or text[:1].isdigit())
+            and text[-1:] in ".!?")
 
 
 def _sentences(article: str) -> List[Tuple[int, int, str]]:
@@ -189,10 +190,13 @@ def safety_notice(action: Dict[str, Any], article: str) -> Dict[str, Any]:
     scored.sort()
     quotes, seen = [], set()
     for _distance, _start, sentence in scored:
-        clean = URL_PATTERN.sub("", sentence).strip()
-        if clean and clean.lower() not in seen:
-            seen.add(clean.lower())
-            quotes.append(clean)
+        # A sentence carrying a URL is DROPPED, not edited: removing the URL would put
+        # words under "From Samsung's article" that are not in the article.
+        if URL_PATTERN.search(sentence):
+            continue
+        if sentence.lower() not in seen:
+            seen.add(sentence.lower())
+            quotes.append(sentence)
         if len(quotes) >= config.GUIDED_MAX_WARNINGS:
             break
     return {**base, "quotes": quotes, "source": "article" if quotes else "none"}

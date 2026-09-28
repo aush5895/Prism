@@ -96,3 +96,16 @@ def test_the_health_report_renders_only_measured_figures(entries):
     assert "`test:fixture`" in md
     for x in report["label_unsupported"]:
         assert f"`{x['id']}`" in md
+
+
+def test_the_readme_quotes_the_resolver_figures_the_harness_measures(repo_root):
+    """The README states resolver figures that do not depend on the LLM provider. They were
+    once typed by hand after a run and drifted from report.json. This recomputes them."""
+    from evaluation import run_eval, synthetic
+
+    readme = (repo_root / "README.md").read_text(encoding="utf-8")
+    stages = {r["stage"]: r for r in run_eval.run_ablation(synthetic.build_cases())}
+    v0, v4 = stages["V0"], stages[max(stages)]
+    for figure in (v0["wrong_pct"], v4["wrong_pct"], v0["precision_pct"],
+                   v4["precision_pct"], v4["accuracy_at_1_pct"]):
+        assert f"{figure}%" in readme, f"README does not state the measured {figure}%"

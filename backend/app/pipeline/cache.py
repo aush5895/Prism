@@ -244,6 +244,10 @@ class SemanticCache:
                         if article_text else None),
         )
         seeds = self._seed_keys(enriched, query_variations)
+        # Load the embedder before the first store, not the first lookup: the key cap
+        # depends on whether it is corpus-dependent, and a store-first caller (the scale
+        # harness) otherwise ran a TF-IDF cache uncapped, which production never does.
+        self._embedder_or_none()
         with self._lock:
             if plan.article_id:
                 self._articles.setdefault(plan.article_id, article_text)
