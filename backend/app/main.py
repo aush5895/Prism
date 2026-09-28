@@ -280,7 +280,7 @@ def troubleshoot(req: TroubleshootRequest) -> Dict[str, Any]:
 
 class GuidedAnswer(BaseModel):
     model_config = {"extra": "forbid"}
-    outcome: Literal["fixed", "not_fixed", "could_not_do"]
+    outcome: Literal["fixed", "not_fixed", "could_not_do", "skipped"]
 
 
 class GuidedConfirm(BaseModel):
@@ -313,7 +313,10 @@ def guided_start(req: TroubleshootRequest) -> Dict[str, Any]:
         article_title=article.title if article else None,
         article_text=article.text if article else "",
     )
-    return {"session": session.view(), "envelope": envelope}
+    # Catalog ids ride beside the envelope, as they do on /v1/troubleshoot/debug, so the
+    # guided screen's proof panel can name the entry behind each link.
+    return {"session": session.view(), "envelope": envelope,
+            "catalog_ids": _catalog_ids_for(envelope["response"], get_catalog())}
 
 
 @app.get("/v1/guided/{session_id}")

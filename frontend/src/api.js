@@ -28,3 +28,29 @@ export function troubleshoot(query, siisResponse) {
 export function health() {
   return json('/health')
 }
+
+// Guided mode (non-spec). The backend owns the session and enforces the safety gate;
+// these only forward the customer's answer.
+function post(path, body) {
+  return json(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+}
+
+export function guidedStart(query, siisResponse) {
+  return post('/v1/guided/start', { query, siis_response: siisResponse })
+}
+
+export function guidedAnswer(sessionId, outcome) {
+  return post(`/v1/guided/${sessionId}/answer`, { outcome })
+}
+
+export function guidedConfirm(sessionId, proceed) {
+  return post(`/v1/guided/${sessionId}/confirm`, { proceed })
+}
+
+export function guidedEscalate(sessionId) {
+  return post(`/v1/guided/${sessionId}/escalate`)
+}

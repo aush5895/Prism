@@ -60,8 +60,12 @@ TERMINAL = frozenset({RESOLVED, ESCALATED, NO_PLAN})
 FIXED = "fixed"
 NOT_FIXED = "not_fixed"
 COULD_NOT_DO = "could_not_do"
+# The customer moved on without doing it. Offered at the plan's support step: answering
+# "did not help" to "Contact Support" would put a false line in the agent's handoff.
+SKIPPED = "skipped"
 DECLINED = "declined"            # recorded by the safety gate, not by /answer
-OUTCOMES = frozenset({FIXED, NOT_FIXED, COULD_NOT_DO})
+OUTCOMES = frozenset({FIXED, NOT_FIXED, COULD_NOT_DO, SKIPPED})
+NOT_ATTEMPTED = frozenset({SKIPPED, DECLINED})
 
 # Why a session ended in a handoff.
 REASON_EXHAUSTED = "plan_exhausted"
@@ -254,8 +258,14 @@ class GuidedSession:
         if self.status not in (ACTIVE, AWAITING_CONFIRMATION):
             return None
         action = self.actions[self.cursor]
-        view: Dict[str, Any] = {"index": self.cursor, "action": action,
-                                "support_step": is_support_step(action)}
+        view: Dict[str, Any] = {
+            "index": self.cursor, "action": action,
+            "support_step": is_support_step(action),
+            # How many last-resort steps still follow this one. At the support step it is
+            # the reason to offer an agent now rather than later.
+            "critical_after": sum(1 for a in self.actions[self.cursor + 1:]
+                                  if a.get("category") == "critical"),
+        }
         if action.get("category") == "critical":
             view["safety_gate"] = {
                 "confirmed": self.cursor in self.confirmed,
@@ -284,10 +294,12 @@ _OUTCOME_LABEL = {
     FIXED: "fixed the problem",
     NOT_FIXED: "did not help",
     COULD_NOT_DO: "customer could not complete it",
+    SKIPPED: "skipped by the customer",
     DECLINED: "customer declined (critical step)",
 }
 _REASON_LABEL = {
-    REASON_EXHAUSTED: "every step in the plan was tried",
+    # Not "every step was tried": a declined or skipped step was not.
+    REASON_EXHAUSTED: "the plan ran out of steps",
     REASON_REQUESTED: "the customer asked for an agent",
     REASON_NO_PLAN: "the supplied article does not answer this complaint",
 }
@@ -317,17 +329,26 @@ def build_handoff(session: GuidedSession) -> Dict[str, Any]:
     total = len(session.actions)
 
     declined = sum(1 for t in tried if t["outcome"] == DECLINED)
+    skipped = sum(1 for t in tried if t["outcome"] == SKIPPED)
     if session.status == NO_PLAN:
         headline = ("No plan: the supplied article does not cover this complaint. "
                     "Nothing was attempted.")
     else:
-        # "Tried" must not include a step the customer refused: an agent reading "tried
-        # 10 of 10" would assume the factory reset had been done.
-        done = len(tried) - declined
-        headline = (f"Customer tried {done} of {total} step{'' if total == 1 else 's'}"
-                    + (f" from '{_clean(session.article_title)}'" if session.article_title else "")
-                    + (f" and declined {declined}" if declined else "")
-                    + ". None resolved the issue.")
+        # "Tried" must not include a step the customer refused or skipped: an agent
+        # reading "tried 10 of 10" would assume the factory reset had been done.
+        done = sum(1 for t in tried if t["outcome"] not in NOT_ATTEMPTED)
+        extras = [f"declined {declined}" if declined else "",
+                  f"skipped {skipped}" if skipped else ""]
+        extras = [e for e in extras if e]
+        source = f" from '{_clean(session.article_title)}'" if session.article_title else ""
+        if not tried:
+            # "tried 0 of 10 ... None resolved the issue" reads as if something failed.
+            headline = (f"Customer has not tried any of the {total} "
+                        f"step{'' if total == 1 else 's'}{source} yet.")
+        else:
+            headline = (f"Customer tried {done} of {total} step{'' if total == 1 else 's'}"
+                        + source + (f", {' and '.join(extras)}" if extras else "")
+                        + ". None resolved the issue.")
 
     lines = [
         "AGENT HANDOFF",
@@ -341,7 +362,7 @@ def build_handoff(session: GuidedSession) -> Dict[str, Any]:
     lines.append(f"Why handed off: {_REASON_LABEL.get(reason, reason or 'unknown')}")
     lines.append(headline)
     if tried:
-        lines.append("Already tried:")
+        lines.append("Step by step:")
         lines.extend(f"  {t['step']}. {t['action']} - {t['outcome_label']}" for t in tried)
     if remaining:
         lines.append("Not yet tried:")
@@ -358,6 +379,7 @@ def build_handoff(session: GuidedSession) -> Dict[str, Any]:
         "article_title": _clean(session.article_title) or None,
         "tried": tried,
         "declined": declined,
+        "skipped": skipped,
         "not_tried": remaining,
         "duration_s": round(session.updated_at - session.created_at, 1),
         "text": "\n".join(lines),

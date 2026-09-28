@@ -351,3 +351,41 @@ def test_the_plans_support_step_is_offered_as_the_handoff_point(row21_envelope,
     names = [a["actionName"] for a in actions]
     first_critical = [a["category"] for a in actions].index("critical")
     assert all(names.index(n) < first_critical for n in flagged)
+
+
+def test_skipping_the_support_step_is_reported_as_skipped():
+    """Answering 'did not help' to 'Contact Support' would tell the agent the customer
+    already contacted support. Moving on without it has its own outcome."""
+    plan = _plan("manual", "manual", "critical")
+    plan["response"]["contexts"][0]["actions"][1]["actionName"] = "Contact Samsung Support"
+    store, session = _open(plan)
+    store.apply(session.session_id, "answer", outcome=NOT_FIXED)
+    current = session.current()
+    assert current["support_step"] is True
+    assert current["critical_after"] == 1
+    store.apply(session.session_id, "answer", outcome=guided.SKIPPED)
+    store.apply(session.session_id, "escalate")
+    handoff = session.view()["handoff"]
+    assert handoff["skipped"] == 1
+    assert "tried 1 of 3 steps" in handoff["headline"] and "skipped 1" in handoff["headline"]
+    assert "skipped by the customer" in handoff["text"]
+
+
+def test_guided_start_names_the_catalog_entry_behind_each_link(client, row21):
+    body = {"query": row21["original_query"], "siis_response": row21["siis_response"]}
+    data = client.post("/v1/guided/start", json=body).json()
+    uris = {g["actionableDeeplink"]["deeplink"]
+            for a in data["envelope"]["response"]["contexts"][0]["actions"]
+            for g in a["stepGroups"] if g.get("actionableDeeplink")}
+    real = {u for u in uris if u != "bixby://dummy_positive"}
+    assert real and real <= set(data["catalog_ids"])
+
+
+def test_an_immediate_handoff_does_not_claim_steps_failed():
+    """REGRESSION. Escalating before answering anything read 'Customer tried 0 of 10
+    steps ... None resolved the issue', as if something had been tried and failed."""
+    store, session = _open(_plan("manual", "auto"))
+    store.apply(session.session_id, "escalate")
+    headline = session.view()["handoff"]["headline"]
+    assert "not tried any of the 2 steps" in headline
+    assert "None resolved" not in headline

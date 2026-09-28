@@ -23,7 +23,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 // chip says "simulated" and the model on the entry card is enrich.py's parse of the
 // complaint text, passed in — it is never inferred in JS.
 
-const CATEGORY_WORDS = {
+export const CATEGORY_WORDS = {
   auto: { label: 'Settings change', cls: 'auto' },
   manual: { label: 'Do this by hand', cls: 'manual' },
   critical: { label: 'Last resort', cls: 'critical' },
@@ -185,7 +185,7 @@ export function AnalyzingCard({ query }) {
 }
 
 // --------------------------------------------------------------------------- beat 5
-function OpenButton({ deeplink, validation, catalogId, open, onToggle }) {
+export function OpenButton({ deeplink, validation, catalogId, open, onToggle }) {
   const [copied, setCopied] = useState(false)
   const name = screenName(deeplink.message)
   const label = buttonLabel(deeplink)
@@ -264,7 +264,9 @@ function OpenButton({ deeplink, validation, catalogId, open, onToggle }) {
 }
 
 // --------------------------------------------------------------------- beats 3, 4, 6
-export function CustomerView({ envelope, catalogIds = {}, focus = null, onRestart }) {
+export function CustomerView({
+  envelope, catalogIds = {}, focus = null, onRestart, onGuide, guideBusy = false,
+}) {
   const context = envelope?.response?.contexts?.[0]
   const actions = context?.actions || []
 
@@ -273,21 +275,20 @@ export function CustomerView({ envelope, catalogIds = {}, focus = null, onRestar
   const [openKey, setOpenKey] = useState(null)
   const cardRefs = useRef({})
 
-  // The first group that resolved to a link: the one the verify beat opens. Placeholder
-  // URIs count, since their proof panel is exactly where we say a screen has no entry.
-  const firstLink = useMemo(() => {
+  // The first group that resolved to a REAL catalog entry.
+  const firstReal = useMemo(() => {
     for (let i = 0; i < actions.length; i += 1) {
       const groups = actions[i].stepGroups || []
       for (let j = 0; j < groups.length; j += 1) {
-        if (groups[j].actionableDeeplink) return { key: `${i}.${j}`, card: i }
+        const uri = groups[j].actionableDeeplink?.deeplink
+        if (uri && uri !== DUMMY_URI) return { key: `${i}.${j}`, card: i }
       }
     }
     return null
   }, [actions])
 
-  // The honest-fallback beat opens a PLACEHOLDER proof by preference: bixby://dummy_positive
-  // is the engine saying "this screen has no catalog entry and I will not invent one",
-  // and that panel is the only place it says so in words.
+  // bixby://dummy_positive: the engine saying "this screen has no catalog entry and I
+  // will not invent one". Opened only when the plan has no real entry to show.
   const firstPlaceholder = useMemo(() => {
     for (let i = 0; i < actions.length; i += 1) {
       const groups = actions[i].stepGroups || []
@@ -300,13 +301,15 @@ export function CustomerView({ envelope, catalogIds = {}, focus = null, onRestar
     return null
   }, [actions])
 
-  const target = focus === 'fallback' ? firstPlaceholder || firstLink : firstLink
+  // Resolution Verify opens a REAL catalog entry by preference, and a placeholder only
+  // when the plan has no real one: the beat exists to show a verified entry.
+  const target = firstReal || firstPlaceholder
   const focusCard = focus === 'detail' ? 0
-    : (focus === 'verify' || focus === 'fallback') ? target?.card ?? 0
+    : focus === 'verify' ? target?.card ?? 0
       : null
 
   useEffect(() => {
-    if (focus === 'verify' || focus === 'fallback') setOpenKey(target ? target.key : null)
+    if (focus === 'verify') setOpenKey(target ? target.key : null)
     else if (focus === 'detail') setOpenKey(null)
   }, [focus, target])
 
@@ -326,6 +329,11 @@ export function CustomerView({ envelope, catalogIds = {}, focus = null, onRestar
             We could not find steps we are confident about for this problem, so we are not
             guessing. Contact Samsung Support and they can take it further.
           </p>
+          {onGuide && (
+            <button type="button" className="cta g-start" disabled={guideBusy} onClick={onGuide}>
+              Hand this to an agent <span aria-hidden="true">→</span>
+            </button>
+          )}
           {onRestart && (
             <button type="button" className="linkish" onClick={onRestart}>
               Describe a different problem
@@ -342,6 +350,11 @@ export function CustomerView({ envelope, catalogIds = {}, focus = null, onRestar
         <div className="eyebrow">Your plan</div>
         <h2>{context.title}</h2>
         <p>Try these in order. Stop as soon as the problem goes away.</p>
+        {onGuide && (
+          <button type="button" className="cta g-start" disabled={guideBusy} onClick={onGuide}>
+            {guideBusy ? 'Starting…' : 'Guide me step by step'} <span aria-hidden="true">→</span>
+          </button>
+        )}
         {onRestart && (
           <button type="button" className="linkish" onClick={onRestart}>
             ← Describe a different problem

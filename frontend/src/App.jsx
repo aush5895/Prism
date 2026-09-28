@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { API_BASE, fetchSamples, troubleshoot } from './api.js'
+import {
+  API_BASE, fetchSamples, guidedAnswer, guidedConfirm, guidedEscalate, guidedStart,
+  troubleshoot,
+} from './api.js'
 import {
   EnrichmentPanel, GroundingPanel, PlanPanel, ResolverPanel, TelemetryPanel,
 } from './panels.jsx'
 import { AnalyzingCard, CustomerView, EntryCard } from './customer.jsx'
+import { GuidedView } from './guided.jsx'
 
 const REPO_URL = 'https://github.com/aush5895/Prism'
 
@@ -16,7 +20,11 @@ const BEATS = [
   { n: 3, name: 'Results', hint: 'The ordered plan' },
   { n: 4, name: 'Step Detail', hint: 'Focus the first action' },
   { n: 5, name: 'Resolution Verify', hint: 'Show the catalog entry behind a link' },
-  { n: 6, name: 'Honest Fallback', hint: 'row_1 - a plan with nothing to link' },
+  // Beat 6 used to be "Honest Fallback" on row_1, framed as the engine declining a
+  // mismatched article. With the live provider row_1 returns a five-action plan, so the
+  // beat demonstrated something the system does not do. It is gone; see LIMITATIONS.md.
+  { n: 6, name: 'Guided Session', hint: 'Walk the plan one step at a time' },
+  { n: 7, name: 'Agent Handoff', hint: 'Hand the session to a person with its full record' },
 ]
 
 function ViewToggle({ view, setView }) {
@@ -46,6 +54,9 @@ export default function App() {
   // Customer view is the default: the product is the plan, not the instrumentation.
   const [view, setView] = useState('customer')
   const [beat, setBeat] = useState(1)
+  // Guided mode: the session the backend owns, and the envelope + catalog ids it walks.
+  const [guided, setGuided] = useState(null)
+  const [guidedBusy, setGuidedBusy] = useState(false)
 
   useEffect(() => {
     fetchSamples()
@@ -73,7 +84,54 @@ export default function App() {
     setSelected(id)
     if (next) setQuery(next.query)
     setResult(null)
+    setGuided(null)
     setLastColdMs(null)
+    setBeat(1)
+  }
+
+  // Every guided call returns the whole session view; the UI just renders the latest.
+  async function guidedCall(fn) {
+    if (guidedBusy) return
+    setGuidedBusy(true)
+    setError(null)
+    try {
+      const next = await fn()
+      const session = next.session || next
+      setGuided((prev) => ({ ...prev, session }))
+      // A session that ends in a handoff lands on the handoff beat, however it got there.
+      if (['escalated', 'no_plan'].includes(session.status)) setBeat(7)
+      return next
+    } catch (e) {
+      setError(e.message)
+      return undefined
+    } finally {
+      setGuidedBusy(false)
+    }
+  }
+
+  async function startGuided(opts = {}) {
+    const target = opts.sample || sample
+    const text = opts.query ?? query
+    if (!target) return undefined
+    setGuidedBusy(true)
+    setError(null)
+    try {
+      // The backend runs the normal pipeline first, so a complaint just analyzed is
+      // answered from cache and the walk opens on the plan the customer already saw.
+      const data = await guidedStart(text, target.siis_response)
+      setGuided({ session: data.session, envelope: data.envelope, catalogIds: data.catalog_ids })
+      setBeat(data.session.status === 'no_plan' ? 7 : 6)
+      return data.session
+    } catch (e) {
+      setError(e.message)
+      return undefined
+    } finally {
+      setGuidedBusy(false)
+    }
+  }
+
+  function restart() {
+    setGuided(null)
     setBeat(1)
   }
 
@@ -103,15 +161,21 @@ export default function App() {
     if (n === 1) return setBeat(1)
     if (n === 2) return analyze()
     if (n === 6) {
-      // The honest-fallback beat is row_1 specifically: its article yields a plan whose
-      // actions are all manual, so there is no screen to link and the UI says so rather
-      // than inventing one.
-      const fallbackRow = samples.find((s) => s.id === 'row_1')
-      if (!fallbackRow) return undefined
-      setSelected(fallbackRow.id)
-      setQuery(fallbackRow.query)
-      setLastColdMs(null)
-      return analyze({ sample: fallbackRow, query: fallbackRow.query, land: 6 })
+      if (guided && guided.session.status !== 'resolved') return setBeat(6)
+      return startGuided()
+    }
+    if (n === 7) {
+      // Hand the current session to an agent; open one first if none is running.
+      return (async () => {
+        let session = guided?.session
+        if (!session || ['resolved', 'escalated', 'no_plan'].includes(session.status)) {
+          session = await startGuided()
+        }
+        if (session && !['escalated', 'no_plan'].includes(session.status)) {
+          await guidedCall(() => guidedEscalate(session.session_id))
+        }
+        setBeat(7)
+      })()
     }
     if (!result) return analyze({ land: n })
     return setBeat(n)
@@ -167,7 +231,8 @@ export default function App() {
   }, [query, samples, result])
 
   const customerBeat = busy ? 2 : beat
-  const showResults = customerBeat >= 3 && Boolean(result)
+  const showGuided = customerBeat >= 6 && Boolean(guided)
+  const showResults = customerBeat >= 3 && Boolean(result) && !showGuided
 
   return (
     <div className={`app app--${view}`}>
@@ -199,7 +264,7 @@ export default function App() {
                     type="button"
                     className={`beat${customerBeat === b.n ? ' on' : ''}`}
                     title={b.hint}
-                    disabled={busy || !samples.length}
+                    disabled={busy || guidedBusy || !samples.length}
                     aria-current={customerBeat === b.n ? 'step' : undefined}
                     onClick={() => goBeat(b.n)}
                   >
@@ -258,7 +323,7 @@ export default function App() {
         <main className="stage">
           {busy && <AnalyzingCard query={query} />}
 
-          {!busy && !showResults && (
+          {!busy && !showResults && !showGuided && (
             <EntryCard
               query={query}
               setQuery={setQuery}
@@ -275,12 +340,27 @@ export default function App() {
             <CustomerView
               envelope={result.envelope}
               catalogIds={catalogIds}
-              focus={
-                customerBeat === 4 ? 'detail'
-                  : customerBeat === 5 ? 'verify'
-                    : customerBeat === 6 ? 'fallback' : null
-              }
-              onRestart={() => setBeat(1)}
+              focus={customerBeat === 4 ? 'detail' : customerBeat === 5 ? 'verify' : null}
+              onRestart={restart}
+              onGuide={() => startGuided()}
+              guideBusy={guidedBusy}
+            />
+          )}
+
+          {!busy && showGuided && (
+            <GuidedView
+              session={guided.session}
+              envelope={guided.envelope}
+              catalogIds={guided.catalogIds}
+              busy={guidedBusy}
+              onAnswer={(outcome) => guidedCall(() => guidedAnswer(guided.session.session_id, outcome))}
+              onConfirm={(proceed) => guidedCall(() => guidedConfirm(guided.session.session_id, proceed))}
+              onEscalate={async () => {
+                await guidedCall(() => guidedEscalate(guided.session.session_id))
+                setBeat(7)
+              }}
+              onRestart={restart}
+              onExit={result ? () => setBeat(3) : undefined}
             />
           )}
         </main>
