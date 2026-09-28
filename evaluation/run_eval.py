@@ -791,7 +791,9 @@ def run_article_fit_eval(per_row: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         "judged_rows": len(judged),
         "unknown_rows": len(rows) - len(judged),
         "phase0_wrong_judged": len(wrong),
-        "phase0_wrong_flagged": sum(1 for r in wrong if r["fit"] in ("none", "partial")),
+        # Flagged means the model judged something NOT covered. A partial fit made only of
+        # covered and unverified claims is a misquote, not a reported mismatch.
+        "phase0_wrong_flagged": sum(1 for r in wrong if r["fit"] == "none" or r["uncovered"]),
         "phase0_wrong_none": sum(1 for r in wrong if r["fit"] == "none"),
         "unflagged_judged": len(unflagged),
         "unflagged_full": sum(1 for r in unflagged if r["fit"] == "full"),
@@ -1298,7 +1300,8 @@ def _render_article_fit(add, a: Dict[str, Any], provider: str) -> None:
         f"{a['judged_rows'] + a['unknown_rows']} rows is a small sample.")
     add("")
     add(f"- Rows judged: {a['judged_rows']} of {a['judged_rows'] + a['unknown_rows']}.")
-    add(f"- Pairings Phase 0 judged wrong: the engine reported partial or no coverage for "
+    add(f"- Pairings Phase 0 judged wrong: the engine reported at least one problem not "
+        f"covered for "
         f"{a['phase0_wrong_flagged']} of {a['phase0_wrong_judged']} "
         f"(no coverage for {a['phase0_wrong_none']}).")
     add(f"- Pairings Phase 0 did not flag: {a['unflagged_full']} full, "
@@ -1307,11 +1310,11 @@ def _render_article_fit(add, a: Dict[str, Any], provider: str) -> None:
     add(f"- \"Covered\" claims whose quote was not found in the article, and so were not "
         f"believed: {a['unverified_claims']}.")
     add("")
-    add("| Row | Phase 0 verdict | Fit | Covered | Not covered |")
-    add("| --- | --- | --- | ---: | --- |")
+    add("| Row | Phase 0 verdict | Fit | Covered | Unverified | Not covered |")
+    add("| --- | --- | --- | ---: | ---: | --- |")
     for r in a["per_row"]:
         add(f"| {r['id']} | {r['phase0']} | {r['fit']} | {r['covered']}/{r['total']} | "
-            f"{'; '.join(r['uncovered']) or '-'} |")
+            f"{r['unverified']} | {'; '.join(r['uncovered']) or '-'} |")
     add("")
 
 

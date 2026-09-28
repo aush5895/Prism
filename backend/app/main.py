@@ -153,14 +153,19 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
         alignment = ground.evidence_alignment(req.query, evidence)
 
     with timer.stage("article_fit"):
-        fit = article_fit.assess(extraction, evidence.text)
+        # The fit is not graded, so nothing in it may cost the customer the graded plan:
+        # any failure degrades it to "unknown" (review found an IndexError that became a
+        # 500). It also carries article text outside `response`, so it gets the same
+        # zero-URL check; _find already refuses a URL, and this fails closed.
         try:
-            # The fit carries article text to the customer, outside `response`, so it gets
-            # the same zero-URL check. _find already refuses a URL; this fails closed.
+            fit = article_fit.assess(extraction, evidence.text)
             validate.assert_no_urls(fit)
         except validate.ValidationError as exc:
             log.error("article fit carried a URL; reported as unknown: %s", exc)
             fit = article_fit.unknown("url_in_evidence")
+        except Exception:  # noqa: BLE001 - deliberate: never fail the graded path
+            log.exception("article fit failed; reported as unknown")
+            fit = article_fit.unknown("fit_error")
     meta.article_fit = fit
 
     with timer.stage("resolve_and_order"):

@@ -327,11 +327,14 @@ export function ArticleFitPanel({ fit, coldFit = null, coldQuery = null }) {
             : 'unknown'}
         </span>
       </h2>
-      {known ? <FitTable fit={fit} /> : (
+      {known || fit?.issues?.length ? <FitTable fit={fit} /> : null}
+      {!known && (
         <p className="empty">
           {fromCache
             ? 'Cache hit: no model read this complaint, so no fit verdict is shown to the customer. The plan is shared; the complaint may not be.'
-            : 'No verdict. The provider reported no problems to check (the offline parser and older recordings cannot judge coverage), or every claim failed verification.'}
+            : fit?.issues?.length
+              ? 'No verdict: every "covered" claim failed verification, so nothing is shown to the customer. The agent handoff lists them as unverified.'
+              : 'No verdict. The provider reported no problems to check (the offline parser and older recordings cannot judge coverage).'}
         </p>
       )}
       {fromCache && coldFit && coldFit.fit !== 'unknown' && (

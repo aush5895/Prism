@@ -215,6 +215,99 @@ def test_curly_quotes_case_and_a_missing_full_stop_are_tolerated():
     assert issue["evidence"].endswith("it."), "the article's own sentence is shown"
 
 
+def _verdict(quote, article):
+    fit = article_fit.assess(_extraction(
+        {"issue": "the problem", "covered": True, "evidence": quote}), article)
+    return fit["issues"][0]["status"]
+
+
+def test_a_character_whose_lower_case_is_longer_cannot_crash_the_request():
+    """REGRESSION, found on re-review: "\u0130".lower() is two characters, which
+    desynchronised the normalised-to-original offset map; the IndexError reached the
+    graded endpoint as a 500. A valid quote after it must still be found exactly."""
+    article = "\u0130\u0130\u0130. Touch.\nRestart the phone if the touch problem continues"
+    fit = article_fit.assess(_extraction(
+        {"issue": "touch", "covered": True,
+         "evidence": "restart the phone if the touch problem continues"}), article)
+    issue = fit["issues"][0]
+    assert issue["status"] == "covered"
+    assert issue["evidence"] == "Restart the phone if the touch problem continues"
+
+
+def test_a_failing_fit_never_costs_the_customer_the_graded_plan(row21_request,
+                                                                 monkeypatch):
+    """The fit is not graded. Whatever goes wrong inside it, the response still comes
+    back and the fit says unknown."""
+    plain = run_pipeline(row21_request,
+                         provider=ReplayProvider(FIXTURES / "extraction_row21.json"),
+                         use_cache=False)
+
+    def boom(*_a, **_k):
+        raise IndexError("simulated")
+    monkeypatch.setattr(article_fit, "assess", boom)
+    broken = run_pipeline(row21_request,
+                          provider=ReplayProvider(FIXTURES / "extraction_row21.json"),
+                          use_cache=False)
+    assert broken.response == plain.response and broken.response["contexts"]
+    assert broken.meta.article_fit["fit"] == "unknown"
+    assert broken.meta.article_fit["reason"] == "fit_error"
+
+
+def test_several_sentences_or_the_whole_article_are_not_one_quote():
+    """REGRESSION, found on re-review: the whole article as 'evidence' made all 20 rows
+    'full' and put 3 KB of text in meta.article_fit."""
+    assert _verdict(ARTICLE, ARTICLE) == "unverified"
+    assert _verdict("Remove the screen protector if it is peeling. Tap Settings, then "
+                    "Display, then Touch sensitivity to enable it.", ARTICLE) == "unverified"
+
+
+@pytest.mark.parametrize("article, fragment", [
+    ("Touch help. Do not (under any circumstances) factory reset the phone to fix this.",
+     "factory reset the phone to fix this."),
+    ("Touch help. Do not - unless support asks - factory reset the phone to fix this.",
+     "factory reset the phone to fix this."),
+    ("Calls drop. Turn on Wi-Fi calling to fix dropped calls on the phone.",
+     "Fi calling to fix dropped calls on the phone."),
+    ("Never restart            the phone to fix this issue now.",
+     "the phone to fix this issue now."),
+])
+def test_a_fragment_after_a_mid_line_marker_is_not_a_sentence(article, fragment):
+    """REGRESSION, found on re-review: '-', ')' and a 12-character look-behind window
+    counted as sentence starts anywhere, so a fragment could drop the article's own
+    negation ("Do not ... factory reset") and still be accepted as its evidence."""
+    assert _verdict(fragment, article) == "unverified"
+
+
+@pytest.mark.parametrize("quote", [
+    "Step 2: Force a Restart",
+    "Restart your phone and try again",
+    "Hold the Side button for 20 seconds.",
+])
+def test_headings_bullets_and_numbered_lines_are_sentences(quote):
+    article = ("Touch problems\n## Step 2: Force a Restart\n- Restart your phone and try "
+               "again\n1. Hold the Side button for 20 seconds.\n")
+    assert _verdict(quote, article) == "covered"
+
+
+def test_every_occurrence_is_tried_not_only_the_first():
+    article = ("If the app freezes, restart your phone and try again. "
+               "Still frozen? Restart your phone and try again.")
+    assert _verdict("Restart your phone and try again.", article) == "covered"
+
+
+def test_a_misquote_is_not_counted_as_a_reported_mismatch(repo_root):
+    """REGRESSION, found on re-review: one covered plus one unverified claim is a
+    'partial' fit, and §6.2 counted it as the engine flagging a Phase 0 mismatch."""
+    import sys
+    sys.path.insert(0, str(repo_root))
+    from evaluation.run_eval import run_article_fit_eval
+    fit = {"fit": "partial", "covered": 1, "total": 2, "unverified_claims": 1, "issues": [
+        {"issue": "a", "status": "covered", "covered": True, "quote_found": True},
+        {"issue": "b", "status": "unverified", "covered": False, "quote_found": False}]}
+    result = run_article_fit_eval([{"id": "row_1", "article_fit": fit}])
+    assert result["phase0_wrong_judged"] == 1 and result["phase0_wrong_flagged"] == 0
+
+
 def test_the_gemini_parser_degrades_a_malformed_issue_list_instead_of_failing():
     """complaint_issues is not graded; a bad item must cost the fit, not the plan."""
     from app.llm.gemini import _tolerate_complaint_issues

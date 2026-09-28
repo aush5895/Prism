@@ -50,9 +50,16 @@ COVERED, NOT_COVERED, UNVERIFIED = "covered", "not_covered", "unverified"
 _EQUIVALENT = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
                              "\u2013": "-", "\u2014": "-", "\u00a0": " "})
 _END_MARKS = ".!?"
-# What may sit immediately before a sentence start: nothing, a line break, the end of the
-# previous sentence, or a list marker ("1.", "-", "\u2022").
-_START_AFTER = re.compile(r"(?:^|[\n.!?:;\u2022*\-)]|\b\d+[.)])[ \t\"'\u201c]*$")
+# What may sit immediately before a sentence start: the real start of a line, the end of
+# the previous sentence, or a list marker or heading marker AT THE START OF A LINE ("1.",
+# "-", "\u2022", "#"). A marker mid-line is not a sentence start: "Wi-Fi" and "Do not
+# (ever) reset" would otherwise let a fragment through with its negation cut off.
+_START_AFTER = re.compile(
+    r"(?:^|[.!?:;]|^[ \t]*(?:[\u2022*\-]|\d+[.)]|#+))[ \t\"'\u201c]*\Z", re.M)
+_START_LOOKBACK = 40
+# A second sentence inside the span: an end mark, an optional closing quote or bracket,
+# whitespace, then more text.
+_INNER_BREAK = re.compile(r"[.!?][\"')\u201d]?\s+\S")
 
 
 def _clean(text: str) -> str:
@@ -61,7 +68,9 @@ def _clean(text: str) -> str:
 
 def _normalise(text: str):
     """Lower-cased text with whitespace runs collapsed and quotes/dashes unified, plus a
-    map from each normalised character back to its offset in the original."""
+    map from each normalised character back to its offset in the original. Exactly one
+    output character per input character kept: "\u0130".lower() is two characters, and
+    letting it grow the text desynchronised the map (review: IndexError, then a 500)."""
     out, where, prev_space = [], [], False
     for i, ch in enumerate((text or "").translate(_EQUIVALENT)):
         if ch.isspace():
@@ -70,14 +79,16 @@ def _normalise(text: str):
             out.append(" ")
             prev_space = True
         else:
-            out.append(ch.lower())
+            low = ch.lower()
+            out.append(low if len(low) == 1 else ch)
             prev_space = False
         where.append(i)
     return "".join(out), where
 
 
 def _at_sentence_start(article: str, at: int) -> bool:
-    return bool(_START_AFTER.search(article[max(0, at - 12):at]))
+    # search(string, pos, endpos): "^" matches only at a real line start, never at pos.
+    return bool(_START_AFTER.search(article, max(0, at - _START_LOOKBACK), at))
 
 
 def _at_sentence_end(article: str, end: int) -> bool:
@@ -87,40 +98,59 @@ def _at_sentence_end(article: str, end: int) -> bool:
             or rest.lstrip(" \t")[:1] in _END_MARKS + "\n")
 
 
+def _one_sentence(text: str) -> bool:
+    text = text.strip()
+    return "\n" not in text and not _INNER_BREAK.search(text)
+
+
+def _occurrences(needle: str, haystack: str):
+    at = haystack.find(needle)
+    while at >= 0:
+        yield at
+        at = haystack.find(needle, at + 1)
+
+
+def _accept(article: str, start: int, end: int):
+    """The span, extended over its own full stop, if it is exactly one whole sentence."""
+    if end < len(article) and article[end] in _END_MARKS and article[end - 1:end] not in _END_MARKS:
+        end += 1
+    if not (_at_sentence_start(article, start) and _at_sentence_end(article, end)):
+        return None
+    text = article[start:end]
+    if URL_PATTERN.search(text) or not _one_sentence(text):
+        return None
+    return start, end
+
+
 def _find(quote: str, article: str):
-    """Where a claimed quote sits in the article as a whole sentence, or None.
+    """Where a claimed quote sits in the article as ONE whole sentence, or None.
 
     Accepted: the quote verbatim, or equal to the article after collapsing whitespace,
     unifying curly quotes and dashes and ignoring case and a final full stop. Refused: a
     quote shorter than a real sentence ("Settings", "."), one that starts or stops
-    mid-sentence, and any quote carrying a URL. Word overlap alone is never enough: the
-    earlier version accepted a located span, and an opposite-meaning sentence sharing the
-    same words passed.
+    mid-sentence, one spanning several sentences (the whole article used to pass), and
+    any quote carrying a URL. Word overlap alone is never enough: an earlier version
+    accepted a located span, and an opposite-meaning sentence with the same words passed.
+    Every occurrence is tried, since the first can sit mid-sentence and a later one not.
     """
     quote = (quote or "").strip()
     if (not quote or not article or URL_PATTERN.search(quote)
-            or len(quote) < config.GUIDED_MIN_QUOTE_CHARS):
+            or len(quote) < config.GUIDED_MIN_QUOTE_CHARS or not _one_sentence(quote)):
         return None
-    at = article.find(quote)
-    if at >= 0:
-        span, how = (at, at + len(quote)), "verbatim"
-    else:
-        norm_article, where = _normalise(article)
-        norm_quote, _ = _normalise(quote)
-        norm_quote = norm_quote.rstrip(_END_MARKS + " ")
-        pos = norm_article.find(norm_quote) if norm_quote else -1
-        if pos < 0:
-            return None
-        span, how = (where[pos], where[pos + len(norm_quote) - 1] + 1), "normalised"
-    start, end = span
-    # Take in the sentence's own full stop when the quote left it off.
-    if end < len(article) and article[end] in _END_MARKS:
-        end += 1
-    if not (_at_sentence_start(article, start) and _at_sentence_end(article, end)):
+    for at in _occurrences(quote, article):
+        span = _accept(article, at, at + len(quote))
+        if span:
+            return span[0], span[1], "verbatim"
+    norm_article, where = _normalise(article)
+    norm_quote, _ = _normalise(quote)
+    norm_quote = norm_quote.rstrip(_END_MARKS + " ")
+    if not norm_quote:
         return None
-    if URL_PATTERN.search(article[start:end]):
-        return None
-    return start, end, how
+    for pos in _occurrences(norm_quote, norm_article):
+        span = _accept(article, where[pos], where[pos + len(norm_quote) - 1] + 1)
+        if span:
+            return span[0], span[1], "normalised"
+    return None
 
 
 def assess(extraction: Extraction, article: str) -> Dict[str, Any]:

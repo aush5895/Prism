@@ -292,7 +292,8 @@ export function FitBanner({ fit, onAgent }) {
     : fit.fit === 'none'
       ? 'This article does not seem to cover what you described.'
       : fit.covered > 0
-        ? `This article covers ${fit.covered} of the ${fit.total} problems you described.`
+        ? `This article covers ${fit.covered} of the ${fit.total} problems you described${
+          fit.unverified_claims ? `; ${fit.unverified_claims} could not be confirmed either way` : ''}.`
         : 'We could not confirm that this article covers what you described.'
   return (
     <section className={`fit fit--${fit.fit}`} aria-live="polite">
