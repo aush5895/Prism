@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Optional, Sequence
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from app import config  # noqa: E402
+from app import config, guided  # noqa: E402
 from app.contracts import TroubleshootRequest  # noqa: E402
 from app.llm import get_provider  # noqa: E402
 from app.llm.base import LLMProvider  # noqa: E402
@@ -46,6 +46,7 @@ from app.pipeline.cache import (SemanticCache, evidence_key, get_cache,  # noqa:
                                 reset_cache)
 from app.pipeline.embeddings import get_embedder  # noqa: E402
 from app.pipeline.enrich import enrich  # noqa: E402
+from app.pipeline.ground import normalize_siis  # noqa: E402
 from app.pipeline.deeplinks import (GATE_CONCEPT, GATE_MARGIN, GATE_POLARITY, GATE_SCOPE,
                                     GATES_ALL, GATES_NONE, get_catalog)  # noqa: E402
 
@@ -730,6 +731,56 @@ def run_cache_eval(plans: Sequence[Dict[str, Any]], cold_latencies: Sequence[flo
     }
 
 
+# ----------------------------------------------------------------- guided mode
+def run_guided_eval(plans: Sequence[Dict[str, Any]],
+                    per_row: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """What guided mode would do on each supplied row, measured from the real plans.
+
+    Deliberately NOT a resolution rate: that needs real customers answering "did it fix
+    it", and there are none. These are the properties the engine itself guarantees and
+    can be counted: how long each walk is, where the plan's own support step falls, how
+    many steps are gated, and whether each destructive step is shown Samsung's warning.
+    """
+    rows = []
+    for plan in sorted(plans, key=lambda p: p["row_id"]):
+        actions = plan["response"]["contexts"][0]["actions"]
+        article = (normalize_siis(plan["siis_response"]) or None)
+        text = article.text if article else ""
+        critical = [a for a in actions if a["category"] == "critical"]
+        destructive = [a for a in critical if guided.is_destructive(a)]
+        quoted = [a for a in destructive if guided.safety_notice(a, text)["quotes"]]
+        support = next((i for i, a in enumerate(actions) if guided.is_support_step(a)), None)
+        first_critical = next((i for i, a in enumerate(actions)
+                               if a["category"] == "critical"), None)
+        rows.append({
+            "id": plan["row_id"],
+            "steps": len(actions),
+            "self_serve_before_support": support if support is not None else len(actions),
+            "support_step": support + 1 if support is not None else None,
+            "support_before_critical": (support is not None and first_critical is not None
+                                        and support < first_critical),
+            "critical": len(critical),
+            "destructive": len(destructive),
+            "destructive_with_article_warning": len(quoted),
+        })
+    no_plan = sorted(r["id"] for r in per_row if not r["actions"] or r["fallback"])
+    destructive_total = sum(r["destructive"] for r in rows)
+    quoted_total = sum(r["destructive_with_article_warning"] for r in rows)
+    return {
+        "rows_with_plan": len(rows),
+        "rows_handed_off_immediately": no_plan,
+        "steps_median": statistics.median([r["steps"] for r in rows]) if rows else 0,
+        "critical_total": sum(r["critical"] for r in rows),
+        "gated_without_data_loss_quote": sum(r["critical"] - r["destructive"] for r in rows),
+        "destructive_total": destructive_total,
+        "destructive_with_article_warning": quoted_total,
+        "destructive_with_article_warning_pct": pct(quoted_total, destructive_total),
+        "plans_with_support_step": sum(1 for r in rows if r["support_step"]),
+        "support_before_critical": sum(1 for r in rows if r["support_before_critical"]),
+        "per_row": rows,
+    }
+
+
 # ----------------------------------------------------------------- report
 def build_report(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any]:
     cases = synthetic.build_cases()
@@ -741,6 +792,7 @@ def build_report(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any]:
     # measuring the cache costs no extra LLM calls.
     plans = compliance.pop("_plans", [])
     cache_eval = run_cache_eval(plans, [r["latency_ms"] for r in compliance["per_row"]])
+    guided_eval = run_guided_eval(plans, compliance["per_row"])
     return {
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "provider_requested": provider_name,
@@ -761,6 +813,7 @@ def build_report(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any]:
         "margin_sweep": run_margin_sweep(cases),
         "scope_fields_comparison": run_scope_field_comparison(cases),
         "cache": cache_eval,
+        "guided": guided_eval,
     }
 
 
@@ -1075,6 +1128,8 @@ def render_metrics(report: Dict[str, Any]) -> str:
             f"{'yes' if row['url_leak'] else 'no'} | {row['fallback'] or '-'} | "
             f"{row['latency_ms']} ms |")
     add("")
+    if report.get("guided"):
+        _render_guided(add, report["guided"])
 
     # ---- 7
     add("## 7. Limitations")
@@ -1123,6 +1178,37 @@ def render_metrics(report: Dict[str, Any]) -> str:
     if scale and scale.get("by_size"):
         _render_scale(add, scale)
     return "\n".join(lines) + "\n"
+
+
+def _render_guided(add, g: Dict[str, Any]) -> None:
+    """Section 6.1. Counted from the same plans as section 6; nothing typed here."""
+    add("### 6.1 Guided mode over the same plans")
+    add("")
+    add("Non-spec (`/v1/guided/*`). What the walk-through does on each supplied row. This "
+        "is not a resolution rate: that needs real customers answering \"did it fix it\", "
+        "and there are none.")
+    add("")
+    handed = g["rows_handed_off_immediately"]
+    add(f"- Rows with a plan to walk: {g['rows_with_plan']}; median {g['steps_median']} steps.")
+    add(f"- Rows handed straight to an agent because the article cannot answer them: "
+        f"{len(handed)}" + (f" ({', '.join(handed)})" if handed else "") + ".")
+    add(f"- Critical steps behind the confirmation gate: {g['critical_total']}. Of those, "
+        f"{g['destructive_total']} destroy data and {g['destructive_with_article_warning']} "
+        f"({g['destructive_with_article_warning_pct']}%) are shown a data-loss warning quoted "
+        f"from Samsung's article; {g['gated_without_data_loss_quote']} are gated with no "
+        f"data-loss warning, because they erase nothing.")
+    add(f"- Plans containing a support step: {g['plans_with_support_step']}; in "
+        f"{g['support_before_critical']} of them it comes before the first critical step, "
+        f"which is where guided mode offers the agent handoff.")
+    add("")
+    add("| Row | Steps | Self-serve before support | Support step | Critical | Destructive "
+        "| Destructive with Samsung's warning |")
+    add("| --- | ---: | ---: | ---: | ---: | ---: | ---: |")
+    for r in g["per_row"]:
+        add(f"| {r['id']} | {r['steps']} | {r['self_serve_before_support']} | "
+            f"{r['support_step'] or '-'} | {r['critical']} | {r['destructive']} | "
+            f"{r['destructive_with_article_warning']} |")
+    add("")
 
 
 def _render_scale(add, scale: Dict[str, Any]) -> None:

@@ -6,15 +6,16 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Literal
 
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
-from . import config
+from . import config, guided
 from .contracts import (FALLBACK_NO_MATCH, FALLBACK_NO_SIIS_CONTEXT,
                         FALLBACK_SCHEMA_REPAIR_EXHAUSTED, Meta, TroubleshootEnvelope,
                         TroubleshootRequest)
@@ -82,6 +83,7 @@ def metrics() -> Dict[str, Any]:
     snapshot = METRICS.snapshot()
     if config.CACHE_ENABLED:
         snapshot["cache"] = get_cache().snapshot()
+    snapshot["guided"] = guided.get_store().snapshot()
     return snapshot
 
 
@@ -268,3 +270,75 @@ def troubleshoot(req: TroubleshootRequest) -> Dict[str, Any]:
         return run_pipeline(req).model_dump(exclude_none=False)
     except validate.ValidationError as exc:
         raise HTTPException(status_code=500, detail=f"response_refused: {exc}") from exc
+
+
+# --------------------------------------------------------------------------- guided mode
+# Non-spec. Walks the validated plan one action at a time; see app/guided.py. Every
+# session starts from run_pipeline, so the plan it walks is exactly the graded response,
+# including a cache hit.
+
+
+class GuidedAnswer(BaseModel):
+    model_config = {"extra": "forbid"}
+    outcome: Literal["fixed", "not_fixed", "could_not_do"]
+
+
+class GuidedConfirm(BaseModel):
+    model_config = {"extra": "forbid"}
+    proceed: bool
+
+
+def _guided_call(session_id: str, verb: str, **kwargs) -> Dict[str, Any]:
+    try:
+        session = guided.get_store().apply(session_id, verb, **kwargs)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="unknown or expired session") from exc
+    except guided.GuidedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return session.view()
+
+
+@app.post("/v1/guided/start")
+def guided_start(req: TroubleshootRequest) -> Dict[str, Any]:
+    """Run the normal pipeline, then open a session over its validated plan."""
+    try:
+        envelope = run_pipeline(req).model_dump(exclude_none=False)
+    except validate.ValidationError as exc:
+        raise HTTPException(status_code=500, detail=f"response_refused: {exc}") from exc
+    article = ground.normalize_siis(req.siis_response)
+    session = guided.get_store().start(
+        query=req.query,
+        envelope=envelope,
+        enrichment=enrich(req.query).model_dump(),
+        article_title=article.title if article else None,
+        article_text=article.text if article else "",
+    )
+    return {"session": session.view(), "envelope": envelope}
+
+
+@app.get("/v1/guided/{session_id}")
+def guided_get(session_id: str) -> Dict[str, Any]:
+    try:
+        return guided.get_store().get(session_id).view()
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="unknown or expired session") from exc
+
+
+@app.post("/v1/guided/{session_id}/answer")
+def guided_answer(session_id: str, body: GuidedAnswer) -> Dict[str, Any]:
+    """Did the action in front of the customer fix it? Refused (409) on a critical action
+    that has not been confirmed, and on a session that has already ended."""
+    return _guided_call(session_id, "answer", outcome=body.outcome)
+
+
+@app.post("/v1/guided/{session_id}/confirm")
+def guided_confirm(session_id: str, body: GuidedConfirm) -> Dict[str, Any]:
+    """The safety gate. `proceed: false` records the critical step as declined and moves
+    on; it is never silently skipped."""
+    return _guided_call(session_id, "confirm", proceed=body.proceed)
+
+
+@app.post("/v1/guided/{session_id}/escalate")
+def guided_escalate(session_id: str) -> Dict[str, Any]:
+    """The customer wants a person. Ends the session with an agent handoff."""
+    return _guided_call(session_id, "escalate")

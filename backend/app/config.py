@@ -111,3 +111,15 @@ CACHE_MAX_ENTRIES = int(os.getenv("PRISM_CACHE_MAX_ENTRIES", "120000"))
 CACHE_HIT_LOG_MAX = int(os.getenv("PRISM_CACHE_HIT_LOG_MAX", "1000"))
 CACHE_EMBED_MODEL = os.getenv("PRISM_CACHE_EMBED_MODEL", "all-MiniLM-L6-v2")
 CACHE_TFIDF_COMPONENTS = int(os.getenv("PRISM_CACHE_TFIDF_COMPONENTS", "128"))
+# ---- guided mode (non-spec; walks the VALIDATED plan one action at a time) ----
+# Sessions live in process memory, like the cache: one uvicorn process serves the API.
+GUIDED_MAX_SESSIONS = int(os.getenv("PRISM_GUIDED_MAX_SESSIONS", "2000"))
+GUIDED_SESSION_TTL_S = int(os.getenv("PRISM_GUIDED_SESSION_TTL_S", "3600"))
+# How far from a DESTRUCTIVE step, in characters of the supplied article, a data-loss
+# sentence may sit and still be quoted at that step's safety gate. Measured on the kit:
+# the two articles with a destructive step place their data-loss sentences 1-102
+# characters from it, and neither article contains any other data-loss sentence. So
+# 400 is headroom over what the kit shows, not a fitted boundary: the kit has no case
+# that could test how far is too far.
+GUIDED_WARNING_WINDOW_CHARS = int(os.getenv("PRISM_GUIDED_WARNING_WINDOW_CHARS", "400"))
+GUIDED_MAX_WARNINGS = 2

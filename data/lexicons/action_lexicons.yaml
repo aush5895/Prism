@@ -212,3 +212,37 @@ domains:
     - delay
     - delayed
     - unresponsive
+# --- guided mode: which critical actions DESTROY DATA ---
+# Every critical action gets the confirmation gate. Only these also get a data-loss
+# warning quoted from the article. Measured on the supplied kit: with the gate quoting
+# warnings for every critical action, a restart and a safe-mode step were shown the
+# factory-reset warning that sits next to them, which is false and teaches the customer
+# to ignore the gate. A restart does not erase anything.
+destructive_operation:
+  - factory reset
+  - factory data reset
+  - data reset
+  - hard reset
+  - reset the device
+  - erase all
+  - wipe data
+  - delete all
+
+# --- guided mode: data-loss warnings quoted before a destructive step ---
+# A sentence from the SUPPLIED ARTICLE is shown at the safety gate only if it contains
+# one of these, sits near that step (config.GUIDED_WARNING_WINDOW_CHARS), and is not one
+# of the step's own instructions. Deliberately narrow. "wipe" is absent because the kit
+# uses it for cleaning the screen with a cloth; "delete all" is absent because in the kit
+# it is the button the customer taps, not a warning about it.
+data_loss_warning:
+  - erase
+  - erased
+  - erases
+  - lose
+  - losing
+  - lost
+  - back up
+  - personal information
+  - personal data
+  - cannot be undone
+  - irreversible
