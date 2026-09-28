@@ -27,6 +27,20 @@ no similarity threshold in a 0.40-0.90 sweep brought it to zero, because five of
 supplied rows are black-screen complaints with five different articles and a paraphrase
 like "how to fix black screen" contains nothing that could separate them.
 
+THE ARTICLE PARTITIONS THE SEARCH, it is not only checked afterwards
+-----------------------------------------------------------------
+Test 1 used to run AFTER the search: L0 held one plan per canonical query, and L1 took
+the single nearest key across every article before checking the article. Both turn an
+answerable lookup into a miss. Two articles receiving the same wording overwrote each
+other in L0, and the loser's exact query missed forever; an L1 probe whose nearest key
+belonged to another article was rejected even when its own article's key sat just below
+it. The scale run exposed this as hit rate falling 93% -> 54% -> 12% -> 8% as the corpus
+grew, and on the supplied kit all 8 held-out misses were guard rejections. So L0 is now
+keyed on (canonical, article) and L1 takes its argmax only over the requesting article's
+rows. The evidence check is unchanged in effect: nothing from another article can be
+returned, and a near-match from another article is still logged as an evidence
+rejection when it is the reason the lookup missed.
+
 Guard failure is a MISS, not a downgrade: the full pipeline runs. This matters because
 the two failures are not symmetric. A miss costs one LLM call. A false positive answers
 a Galaxy S22 display complaint with a Galaxy Watch battery plan, confidently and in
@@ -99,6 +113,15 @@ class CachedPlan:
 
 
 @dataclass
+class _Match:
+    """Result of one L1 scan: best row in the requesting article, best row outside it."""
+    index: Optional[int] = None
+    score: Optional[float] = None
+    foreign_index: Optional[int] = None
+    foreign_score: Optional[float] = None
+
+
+@dataclass
 class CacheLookup:
     """The outcome of one lookup. `tier` is the headline; the rest is the audit trail."""
     hit: bool
@@ -128,11 +151,15 @@ class SemanticCache:
         self._max_entries = max_entries or config.CACHE_MAX_ENTRIES
         self._lock = threading.RLock()
 
-        self._l0: Dict[str, CachedPlan] = {}          # canonical query -> plan
+        # L0 is keyed on (canonical query, article): the same words about two different
+        # articles are two different requests with two different correct plans.
+        self._l0: Dict[Tuple[str, Optional[str]], CachedPlan] = {}
+        self._l0_latest: Dict[str, CachedPlan] = {}   # canonical -> newest plan, audit only
         self._keys: List[str] = []                    # L1 key text, row-aligned with...
         self._plans: List[CachedPlan] = []            # ...the plan each key points at
         self._matrix: Optional[np.ndarray] = None     # (n, d) normalised, or None
         self._encoded = 0                             # rows of _keys already in _matrix
+        self._evidence_rows: Optional[np.ndarray] = None   # article per row, for the mask
         self._embedder_failed = False                 # no backend; L1 off, L0 still on
 
         self.stats: Dict[str, int] = {
@@ -197,15 +224,20 @@ class SemanticCache:
         )
         seeds = self._seed_keys(enriched, query_variations)
         with self._lock:
-            self._l0[enriched.canonical] = plan
+            self._l0[(enriched.canonical, evidence)] = plan
+            self._l0_latest[enriched.canonical] = plan
+            self._evidence_rows = None
             added = 0
-            existing = set(self._keys)
+            # Deduplicate per ARTICLE. A paraphrase stored for one article must not stop
+            # the same paraphrase being stored for another, or that article's row is
+            # simply absent from its own partition.
+            existing = {(k, p.evidence_key) for k, p in zip(self._keys, self._plans)}
             for key in seeds:
-                if key in existing:
+                if (key, evidence) in existing:
                     continue
                 self._keys.append(key)
                 self._plans.append(plan)
-                existing.add(key)
+                existing.add((key, evidence))
                 added += 1
             self.stats["stores"] += 1
             self.stats["keys"] = len(self._keys)
@@ -240,18 +272,33 @@ class SemanticCache:
         return out
 
     def _evict_if_needed(self) -> None:
-        """Oldest-first eviction on key count. Called under the lock."""
+        """Oldest-first eviction on key count. Called under the lock.
+
+        Eviction drops rows from the FRONT, so the already-encoded matrix is SLICED the
+        same way rather than thrown away. It used to be thrown away on the reasoning that
+        eviction is rare -- but once the cache is full, EVERY store evicts, so every
+        lookup after a store re-encoded the whole cache. The scale run measured the cost:
+        store-then-hit p95 went from 40 ms at 1,000 scenarios to 24,074 ms at 5,000, the
+        size at which the 5,000-key cap is first reached. A corpus-dependent embedder
+        (TF-IDF) is still rebuilt, because its existing rows are stale anyway.
+        """
         if len(self._keys) <= self._max_entries:
             return
         overflow = len(self._keys) - self._max_entries
         self._keys = self._keys[overflow:]
         self._plans = self._plans[overflow:]
-        # Eviction removes rows from the FRONT, so the append offset no longer lines up
-        # and the matrix has to be rebuilt. Eviction is rare; a store is not.
-        self._matrix = None
-        self._encoded = 0
+        self._evidence_rows = None
+        corpus_dependent = bool(getattr(self._embedder, "corpus_dependent", True))
+        if self._matrix is not None and not corpus_dependent and self._encoded >= overflow:
+            # .copy() so the evicted rows' memory is released, not pinned by a view
+            self._matrix = self._matrix[overflow:].copy()
+            self._encoded -= overflow
+        else:
+            self._matrix = None
+            self._encoded = 0
         live = {id(p) for p in self._plans}
         self._l0 = {k: v for k, v in self._l0.items() if id(v) in live}
+        self._l0_latest = {k: v for k, v in self._l0_latest.items() if id(v) in live}
         self.stats["keys"] = len(self._keys)
 
     # ------------------------------------------------------------------ lookup
@@ -261,8 +308,8 @@ class SemanticCache:
         with self._lock:
             self.stats["lookups"] += 1
 
-            # ---- L0: exact canonical match.
-            plan = self._l0.get(enriched.canonical)
+            # ---- L0: exact canonical match, within this article.
+            plan = self._l0.get((enriched.canonical, evidence))
             if plan is not None:
                 ok, reason = self._guard(plan, enriched, evidence)
                 if ok:
@@ -272,56 +319,96 @@ class SemanticCache:
                     self._record(result, enriched)
                     result.lookup_ms = (time.perf_counter() - started) * 1000.0
                     return result
-                self.stats["guard_rejections"] += 1
-                self.stats["misses"] += 1
-                result = CacheLookup(False, "miss", None, 1.0, enriched.canonical,
-                                     plan.source_query, True, reason)
-                self._record(result, enriched)
-                result.lookup_ms = (time.perf_counter() - started) * 1000.0
-                return result
+                return self._reject(started, enriched, 1.0, enriched.canonical, plan, reason)
 
-            # ---- L1: cosine over every stored key.
-            best_index, best_score = self._best_match(enriched)
-            if best_index is not None and best_score >= self._similarity_min:
-                plan = self._plans[best_index]
+            # ---- L1: cosine over THIS ARTICLE's keys only.
+            match = self._best_match(enriched, evidence)
+            if match.index is not None and match.score >= self._similarity_min:
+                plan = self._plans[match.index]
                 ok, reason = self._guard(plan, enriched, evidence)
                 if ok:
                     self.stats["l1_hits"] += 1
-                    result = CacheLookup(True, "L1", plan, best_score,
-                                         self._keys[best_index], plan.source_query)
+                    result = CacheLookup(True, "L1", plan, match.score,
+                                         self._keys[match.index], plan.source_query)
                     self._record(result, enriched)
                     result.lookup_ms = (time.perf_counter() - started) * 1000.0
                     return result
-                self.stats["guard_rejections"] += 1
-                self.stats["misses"] += 1
-                result = CacheLookup(False, "miss", None, best_score,
-                                     self._keys[best_index], plan.source_query, True, reason)
-                self._record(result, enriched)
-                result.lookup_ms = (time.perf_counter() - started) * 1000.0
-                return result
+                return self._reject(started, enriched, match.score,
+                                    self._keys[match.index], plan, reason)
+
+            # ---- Miss. If the only thing that matched was ANOTHER article's plan, say so:
+            # that is the refusal the evidence key exists to make, and it has to stay
+            # visible in the audit log even though it no longer decides the search.
+            foreign = self._l0_latest.get(enriched.canonical)
+            if foreign is not None and foreign.evidence_key != evidence:
+                return self._reject(started, enriched, 1.0, enriched.canonical, foreign,
+                                    self._evidence_reason(evidence, foreign))
+            if match.foreign_index is not None and \
+                    match.foreign_score >= self._similarity_min:
+                foreign = self._plans[match.foreign_index]
+                return self._reject(started, enriched, match.foreign_score,
+                                    self._keys[match.foreign_index], foreign,
+                                    self._evidence_reason(evidence, foreign))
 
             self.stats["misses"] += 1
-            result = CacheLookup(False, "miss", None, best_score)
+            result = CacheLookup(False, "miss", None, match.score)
             result.lookup_ms = (time.perf_counter() - started) * 1000.0
             return result
 
-    def _best_match(self, enriched: EnrichedQuery) -> Tuple[Optional[int], Optional[float]]:
-        """Highest cosine against the stored keys. One matmul; no index."""
+    def _reject(self, started: float, enriched: EnrichedQuery, similarity: float,
+                matched_key: str, plan: CachedPlan, reason: Optional[str]) -> CacheLookup:
+        """A guard rejection: counted, logged, and reported as a miss."""
+        self.stats["guard_rejections"] += 1
+        self.stats["misses"] += 1
+        result = CacheLookup(False, "miss", None, similarity, matched_key,
+                             plan.source_query, True, reason)
+        self._record(result, enriched)
+        result.lookup_ms = (time.perf_counter() - started) * 1000.0
+        return result
+
+    @staticmethod
+    def _evidence_reason(evidence: Optional[str], plan: CachedPlan) -> str:
+        return (f"evidence {str(evidence)[:8]!r} != cached "
+                f"{str(plan.evidence_key)[:8]!r}")
+
+    def _evidence_mask(self, evidence: Optional[str]) -> np.ndarray:
+        """Boolean row mask: which stored keys belong to this article."""
+        if self._evidence_rows is None or len(self._evidence_rows) != len(self._plans):
+            self._evidence_rows = np.array([p.evidence_key for p in self._plans],
+                                           dtype=object)
+        return self._evidence_rows == evidence
+
+    def _best_match(self, enriched: EnrichedQuery,
+                    evidence: Optional[str] = None) -> "_Match":
+        """Nearest key within this article, and nearest outside it (audit only).
+
+        One matmul over every row, then a mask. Scoring all rows costs the same as
+        scoring a subset and gives the audit trail for free.
+        """
         if not self._keys:
-            return None, None
+            return _Match()
         matrix = self._ensure_matrix()
         if matrix is None or matrix.shape[0] == 0:
-            return None, None
+            return _Match()
         embedder = self._embedder_or_none()
         if embedder is None:
-            return None, None
+            return _Match()
         probe_text = enriched.raw or enriched.canonical
         probe = embedder.encode([probe_text])
         if probe.shape[0] == 0 or probe.shape[1] != matrix.shape[1]:
-            return None, None
+            return _Match()
         scores = matrix @ probe[0]
-        best = int(np.argmax(scores))
-        return best, float(scores[best])
+        mask = self._evidence_mask(evidence)
+        match = _Match()
+        if mask.any():
+            own = np.where(mask, scores, -np.inf)
+            match.index = int(np.argmax(own))
+            match.score = float(own[match.index])
+        if (~mask).any():
+            other = np.where(mask, -np.inf, scores)
+            match.foreign_index = int(np.argmax(other))
+            match.foreign_score = float(other[match.foreign_index])
+        return match
 
     def _ensure_matrix(self) -> Optional[np.ndarray]:
         """Bring the L1 matrix up to date. Called under the lock.
@@ -414,6 +501,8 @@ class SemanticCache:
     def clear(self) -> None:
         with self._lock:
             self._l0.clear()
+            self._l0_latest.clear()
+            self._evidence_rows = None
             self._keys.clear()
             self._plans.clear()
             self._matrix = None

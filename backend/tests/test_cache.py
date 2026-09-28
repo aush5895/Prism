@@ -387,3 +387,109 @@ def test_snapshot_reports_which_backend_and_threshold_ran(cache):
     assert snap["embedder"] == "fake-bow"
     assert snap["similarity_min"] == 0.9
     assert snap["slot_guard"] is True
+
+
+# ----------------------------------------------------------------- scale regressions
+def test_a_full_cache_does_not_re_encode_every_key_on_each_store():
+    """REGRESSION. Observed in evaluation/scale.py: store-then-hit p95 was 40 ms at 1,000
+    scenarios and 24,074 ms at 5,000 -- the first size that reaches the 5,000-key cap.
+    Once the cache is full every store evicts, and eviction threw the whole matrix away,
+    so every lookup after a store re-encoded every key. Eviction must slice, not discard.
+    """
+    class CountingEmbedder(FakeEmbedder):
+        def __init__(self):
+            self.encoded = []
+
+        def encode(self, texts):
+            self.encoded.append(len(texts))
+            return super().encode(texts)
+
+    embedder = CountingEmbedder()
+    cache = SemanticCache(embedder=embedder, similarity_min=0.9, max_entries=12)
+    for i in range(6):                                   # fill well past the cap
+        cache.store(enrich(f"Galaxy S22 screen issue {i}"), _plan(),
+                    [f"screen variant {i} a", f"screen variant {i} b"])
+        cache.lookup(enrich("Galaxy S22 screen"))
+    assert len(cache._keys) == 12, "precondition: the cache must be at its cap"
+
+    embedder.encoded.clear()
+    cache.store(enrich("Galaxy S22 touch issue new"), _plan(), ["touch variant new"])
+    cache.lookup(enrich("Galaxy S22 screen"))
+    key_encodes = [n for n in embedder.encoded if n > 1]
+    assert key_encodes and max(key_encodes) <= 3, \
+        f"a store into a full cache re-encoded the whole store: {embedder.encoded}"
+
+
+def test_eviction_leaves_the_same_matrix_a_full_rebuild_would():
+    """Slicing is only legitimate if it is EXACT. Rows must still line up with keys."""
+    sliced = SemanticCache(embedder=FakeEmbedder(), similarity_min=0.9, max_entries=5)
+    for i, text in enumerate(["screen lag", "battery drain", "camera blurry",
+                              "sound quiet", "touch lag", "screen touch"]):
+        sliced.store(enrich(f"Galaxy S22 {text} {i}"), _plan(), [text])
+        sliced.lookup(enrich("Galaxy S22 screen"))
+    rebuilt = FakeEmbedder().encode(sliced._keys)
+    assert np.allclose(sliced._ensure_matrix(), rebuilt)
+
+
+def test_the_same_words_about_two_articles_are_two_cache_entries(cache):
+    """REGRESSION. L0 held one plan per canonical query, so a second article receiving
+    the same complaint overwrote the first, and the first article's exact query missed
+    from then on. The scale run measured 259 canonical forms shared across scenarios at
+    1,000 scenarios, 257 of them spanning more than one article."""
+    words = enrich("My Galaxy S22 screen is completely black")
+    article_a, article_b = evidence_key("Article A body"), evidence_key("Article B body")
+    cache.store(words, _plan("Action From A"), ["screen black"], evidence=article_a)
+    cache.store(words, _plan("Action From B"), ["screen black"], evidence=article_b)
+
+    from_a = cache.lookup(words, evidence=article_a)
+    from_b = cache.lookup(words, evidence=article_b)
+    assert from_a.hit and from_a.tier == "L0"
+    assert from_b.hit and from_b.tier == "L0"
+    assert from_a.plan.response["contexts"][0]["actions"][0]["actionName"] == "Action From A"
+    assert from_b.plan.response["contexts"][0]["actions"][0]["actionName"] == "Action From B"
+
+
+def test_l1_finds_this_articles_key_even_when_another_articles_key_is_nearer(cache):
+    """REGRESSION. L1 took the single nearest key over EVERY article and only then
+    checked the article, so a probe whose nearest neighbour belonged to another article
+    missed even when its own article held a key well above the threshold. On the
+    supplied kit all 8 held-out misses were guard rejections."""
+    ours, theirs = evidence_key("Touchscreen article"), evidence_key("Camera article")
+    cache.similarity_min = 0.6
+    cache.store(enrich("Galaxy S22 touch problem"), _plan("Ours"),
+                ["screen touch lag"], evidence=ours)
+    cache.store(enrich("Galaxy S22 other problem"), _plan("Theirs"),
+                ["screen touch lag camera"], evidence=theirs)
+
+    # nearest overall is THEIRS (4 shared words) but OURS clears 0.6 on its own
+    probe = enrich("Galaxy S22 screen touch lag camera")
+    result = cache.lookup(probe, evidence=ours)
+    assert result.hit and result.tier == "L1"
+    assert result.plan.evidence_key == ours
+
+
+def test_a_paraphrase_shared_by_two_articles_is_stored_for_both(cache):
+    """REGRESSION. Seed keys were deduplicated by text alone, so a paraphrase already
+    stored for one article was silently skipped for the next, and that article's
+    partition had no row for it."""
+    a, b = evidence_key("Article A"), evidence_key("Article B")
+    cache.store(enrich("Galaxy S22 screen issue one"), _plan("A"), ["screen touch lag"],
+                evidence=a)
+    cache.store(enrich("Galaxy S22 screen issue two"), _plan("B"), ["screen touch lag"],
+                evidence=b)
+    owners = {p.evidence_key for k, p in zip(cache._keys, cache._plans)
+              if k == "screen touch lag"}
+    assert owners == {a, b}
+
+
+def test_another_articles_near_match_is_still_audited_as_an_evidence_refusal(cache):
+    """Partitioning the search must not hide the refusal from the audit log: when the
+    only near match belongs to a different article, the miss says so."""
+    cache.store(enrich("Galaxy S22 touch problem"), _plan(), ["screen touch lag"],
+                evidence=evidence_key("Touchscreen article"))
+    result = cache.lookup(enrich("Galaxy S22 screen touch lag"),
+                          evidence=evidence_key("Unrelated article"))
+    assert result.hit is False
+    assert result.guard_rejected is True
+    assert "evidence" in (result.guard_reason or "")
+    assert cache.hit_log[-1]["guard_rejected"] is True

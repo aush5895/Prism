@@ -1117,7 +1117,69 @@ def render_metrics(report: Dict[str, Any]) -> str:
         "A live provider run reports real extraction latency in the same table.")
     add("- **Cost is an estimate** from published per-token rates, not a billed amount.")
     add("")
+
+    # ---- 8 (additive: only present after `python -m evaluation.scale`)
+    scale = report.get("scale")
+    if scale and scale.get("by_size"):
+        _render_scale(add, scale)
     return "\n".join(lines) + "\n"
+
+
+def _render_scale(add, scale: Dict[str, Any]) -> None:
+    """Section 8. Every figure and the verdict come from report['scale']."""
+    budget = scale["latency_budget_ms"]
+    rows = scale["by_size"]
+    add("## 8. Scale")
+    add("")
+    add(f"`python -m evaluation.scale` at {scale['generated_at_utc']}, seed {scale['seed']}, "
+        f"embedder `{scale['embedder']}`, {scale['probes_per_size']} probes per size.")
+    add("")
+    add(f"**Corpus:** {scale['corpus']}. Every scenario id is `SYN-*`; none is Samsung "
+        f"data. **Measures:** {scale['measures']}. **Does not measure:** "
+        f"{scale['does_not_measure']}.")
+    add("")
+    add("| Scenarios | Cache keys | L0 p95 (ms) | L1 p95 (ms) | Store, then hit p95 (ms) "
+        "| Resolver p95 (ms) | Hit rate | Equivalent hits | False positives | Memory (MB) |")
+    add("| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    for r in rows:
+        add(f"| {r['scenarios']:,} | {r['cache_keys']:,} | {r['l0_p95_ms']} | "
+            f"{r['l1_p95_ms']} | {r['store_then_hit_p95_ms']} | {r['resolver_p95_ms']} | "
+            f"{r['hit_rate_pct']}% | {r.get('equivalent_hit_pct', 0.0)}% | "
+            f"{r['false_positive_pct']}% | {round(r['matrix_mb'] + r['keys_mb'], 2)} |")
+    add("")
+    add("*Equivalent hits* land on another synthetic scenario that re-voices the SAME "
+        "supplied complaint against the SAME article, differing only in generator-added "
+        "context, handset or register; `run_eval` reports this case separately as a "
+        "same-article hit, and so does this table. *False positives* are hits on a "
+        "different complaint or a different article. The strictest count, any hit on "
+        "another scenario at all, is kept in `report.json` as `other_scenario_hit_pct`.")
+    add("")
+    verdict = scale.get("verdict") or {}
+    findings = verdict.get("findings") or []
+    worst = max(max(r["l0_p95_ms"], r["l1_p95_ms"], r["store_then_hit_p95_ms"])
+                for r in rows)
+    if worst <= budget:
+        add(f"Every cache path stays inside the {budget:.0f} ms budget at every size "
+            f"measured; the slowest p95 is {worst} ms.")
+    else:
+        add(f"**Over budget:** the slowest cache-path p95 is {worst} ms against a "
+            f"{budget:.0f} ms budget.")
+    for f in findings:
+        if f["metric"] == "cross-scenario false positives":
+            add(f"- False positives first rise at {f['at_scenarios']:,} scenarios: "
+                f"{f['from_pct']}% → {f['to_pct']}%.")
+        elif f["metric"] == "fast-path p95 over budget":
+            add(f"- Fast path first exceeds the budget at {f['at_scenarios']:,} "
+                f"scenarios ({f['to_ms']} ms).")
+    if not findings:
+        add("- No measured metric degraded as the corpus grew.")
+    add(f"- L1 p95 growth from the smallest to the largest size: "
+        f"{verdict.get('l1_p95_growth_factor')}×.")
+    add(f"- Projected cold-path spend for 10,000 distinct scenarios at the measured "
+        f"per-query cost: ${scale['projected_cold_path_cost_usd_at_10k']}.")
+    add("")
+    add(f"![p95 latency against corpus size]({Path(scale['chart']).name})")
+    add("")
 
 
 def main() -> None:

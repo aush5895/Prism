@@ -102,7 +102,12 @@ GEMINI_API_KEY_ENV = "GEMINI_API_KEY"  # never a literal key
 CACHE_SIMILARITY_MIN = float(os.getenv("PRISM_CACHE_SIMILARITY_MIN", "0.60"))
 CACHE_SLOT_GUARD = True
 CACHE_ENABLED = os.getenv("PRISM_CACHE_ENABLED", "1") not in ("0", "false", "False")
-CACHE_MAX_ENTRIES = int(os.getenv("PRISM_CACHE_MAX_ENTRIES", "5000"))
+# Sized for Samsung's 10k+ scenario target (Theme 2 guide). A cold miss seeds up to 12
+# keys (canonical, raw, 10 variations), so 10,000 scenarios need ~120,000 keys. The old
+# cap of 5,000 held roughly 400-1,000 scenarios, and past that half the scale probes
+# landed on evicted entries whatever the embedder did. Measured cost at 120,000 keys and
+# 384 dimensions: 184 MB of float32 matrix, L1 scan plus article mask p95 ~8 ms.
+CACHE_MAX_ENTRIES = int(os.getenv("PRISM_CACHE_MAX_ENTRIES", "120000"))
 CACHE_HIT_LOG_MAX = int(os.getenv("PRISM_CACHE_HIT_LOG_MAX", "1000"))
 CACHE_EMBED_MODEL = os.getenv("PRISM_CACHE_EMBED_MODEL", "all-MiniLM-L6-v2")
 CACHE_TFIDF_COMPONENTS = int(os.getenv("PRISM_CACHE_TFIDF_COMPONENTS", "128"))
