@@ -6,18 +6,16 @@ Two consumers, one definition:
 
 WHY THE RESOLVER NEEDS THIS
 ---------------------------
-The resolver matches a step against each entry's `message` (its label). Measured on the
-kit: for 58 of 577 real entries the label shares no subject word with the entry's own
-`description` or `qna_description`, and several are plainly a different screen:
+The resolver matches a step against each entry's `message` (its label). For some
+entries the label shares no subject word with the entry's own `description` or
+`qna_description`, and several describe plainly a different screen from the one their
+label names. The list, with examples, is generated into docs/catalog_health.md §1.3; this
+module deliberately quotes none of the catalog's text.
 
-    DL-0163  "Enable Grayscale"        -> "Enables mono audio via device Settings"
-    DL-0312  "Enable WiFi"             -> "Enables Mobile Hotspot via device Settings"
-    DL-0117  "View Timeout Settings"   -> "Opens the guest mode settings page"
-
-So "Tap the switch next to Grayscale to enable it." resolved, confidently, to the mono
-audio toggle. The gold set could not see it: gold is built FROM labels, so following a
-wrong label scores as correct. On the 850-case gold set, 26 of 771 exact resolutions
-landed on such an entry.
+A step phrased from such a label used to resolve confidently to the entry. The gold set
+could not see it: gold is built FROM labels, so following a wrong label scores as
+correct. How many gold-set answers did this, with the check on and off, is measured by
+evaluation/run_eval.py and rendered in docs/metrics.md §2.
 
 WHAT "SUPPORTED" MEANS
 ----------------------
@@ -26,7 +24,8 @@ words and UI verbs removed) appears in the description or QnA text, after:
   - joiners closed up ("Wi-Fi" == "WiFi"), as text.tokens already does
   - a plural "s" dropped ("sounds" == "sound")
   - two adjacent words joined ("auto sync" == "Auto-Sync")
-  - a shared 6-letter stem ("magnification" == "magnifier")
+  - a shared stem of config.CATALOG_AUDIT_STEM_CHARS letters ("magnification" ==
+    "magnifier" at 6)
 This is deliberately LENIENT: an entry is only distrusted when its label and its own
 description share nothing at all. A generic-but-honest label ("View Sound Settings" for
 "mute all sounds") passes.
@@ -36,10 +35,10 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Any, Dict, Iterable, List, Optional, Set
 
+from .. import config
 from ..text import content, subject_of, tokens
 
 DUMMY_ID = "DL-DUMMY"
-STEM = 6
 
 
 def _norm(token: str) -> str:
@@ -57,8 +56,9 @@ def label_supported(entry: Dict[str, Any]) -> bool:
     if not subject:
         return True          # nothing to contradict; other gates handle empty labels
     body = _body_forms(f"{entry.get('description') or ''} {entry.get('qna_description') or ''}")
-    stems = {b[:STEM] for b in body if len(b) >= STEM}
-    return any(t in body or (len(t) >= STEM and t[:STEM] in stems) for t in subject)
+    n = config.CATALOG_AUDIT_STEM_CHARS
+    stems = {b[:n] for b in body if len(b) >= n}
+    return any(t in body or (len(t) >= n and t[:n] in stems) for t in subject)
 
 
 def unsupported_ids(entries: Iterable[Dict[str, Any]]) -> Set[str]:

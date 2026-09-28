@@ -41,6 +41,8 @@ CONCEPT_COVERAGE_MIN = float(os.getenv("PRISM_CONCEPT_COVERAGE_MIN", "0.60"))  #
 # (pipeline/catalog_audit.py). Switchable so run_eval can measure what it costs.
 CONCEPT_REQUIRE_LABEL_SUPPORT = os.getenv("PRISM_CONCEPT_REQUIRE_LABEL_SUPPORT", "1") \
     not in ("0", "false", "False")
+# Two words sharing this many leading letters count as the same word in that check.
+CATALOG_AUDIT_STEM_CHARS = 6
 MARGIN_DELTA = float(os.getenv("PRISM_MARGIN_DELTA", "0.08"))                 # gate [5]
 CANDIDATE_POOL = int(os.getenv("PRISM_CANDIDATE_POOL", "40"))                 # gate [1]
 
@@ -109,9 +111,17 @@ CACHE_ENABLED = os.getenv("PRISM_CACHE_ENABLED", "1") not in ("0", "false", "Fal
 # Sized for Samsung's 10k+ scenario target (Theme 2 guide). A cold miss seeds up to 12
 # keys (canonical, raw, 10 variations), so 10,000 scenarios need ~120,000 keys. The old
 # cap of 5,000 held roughly 400-1,000 scenarios, and past that half the scale probes
-# landed on evicted entries whatever the embedder did. Measured cost at 120,000 keys and
-# 384 dimensions: 184 MB of float32 matrix, L1 scan plus article mask p95 ~8 ms.
+# landed on evicted entries whatever the embedder did. Cost at 120,000 keys and 384
+# dimensions, measured with random unit vectors on 28 Sep: 184 MB of float32 matrix, and
+# an L1 scan plus article mask at p50 5.5 ms / p95 8.1 ms.
 CACHE_MAX_ENTRIES = int(os.getenv("PRISM_CACHE_MAX_ENTRIES", "120000"))
+# The TF-IDF fallback refits on every key after each store, so it keeps the old cap:
+# independent review measured a refit at 3.1 s for 10,000 keys and 38.9 s for 120,000.
+CACHE_MAX_ENTRIES_CORPUS_DEPENDENT = int(os.getenv("PRISM_CACHE_MAX_ENTRIES_TFIDF", "5000"))
+# A full cache evicts in one batch down to this fraction of its cap, so the matrix is
+# shifted once per few thousand stores instead of on every store.
+CACHE_EVICT_TO_FRACTION = 0.9
+CACHE_MATRIX_MIN_ROWS = 1024       # initial capacity of the growable L1 matrix
 CACHE_HIT_LOG_MAX = int(os.getenv("PRISM_CACHE_HIT_LOG_MAX", "1000"))
 CACHE_EMBED_MODEL = os.getenv("PRISM_CACHE_EMBED_MODEL", "all-MiniLM-L6-v2")
 CACHE_TFIDF_COMPONENTS = int(os.getenv("PRISM_CACHE_TFIDF_COMPONENTS", "128"))
@@ -127,3 +137,5 @@ GUIDED_SESSION_TTL_S = int(os.getenv("PRISM_GUIDED_SESSION_TTL_S", "3600"))
 # that could test how far is too far.
 GUIDED_WARNING_WINDOW_CHARS = int(os.getenv("PRISM_GUIDED_WARNING_WINDOW_CHARS", "400"))
 GUIDED_MAX_WARNINGS = 2
+# A gate quote must be a whole sentence of at least this length; see guided._is_whole_sentence.
+GUIDED_MIN_QUOTE_CHARS = 20

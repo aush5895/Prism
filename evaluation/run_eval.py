@@ -1234,13 +1234,15 @@ def _render_guided(add, g: Dict[str, Any]) -> None:
     add("")
     handed = g["rows_handed_off_immediately"]
     add(f"- Rows with a plan to walk: {g['rows_with_plan']}; median {g['steps_median']} steps.")
-    add(f"- Rows handed straight to an agent because the article cannot answer them: "
-        f"{len(handed)}" + (f" ({', '.join(handed)})" if handed else "") + ".")
+    add(f"- Rows with no plan, which guided mode hands straight to an agent (any "
+        f"fallback reason): {len(handed)}" + (f" ({', '.join(handed)})" if handed else "")
+        + ".")
     add(f"- Critical steps behind the confirmation gate: {g['critical_total']}. Of those, "
         f"{g['destructive_total']} destroy data and {g['destructive_with_article_warning']} "
         f"({g['destructive_with_article_warning_pct']}%) are shown a data-loss warning quoted "
-        f"from Samsung's article; {g['gated_without_data_loss_quote']} are gated with no "
-        f"data-loss warning, because they erase nothing.")
+        f"from Samsung's article; {g['gated_without_data_loss_quote']} name no destructive "
+        f"operation, so they are gated without a data-loss quote (a lexicon miss is not "
+        f"proof a step is safe, and the customer view does not claim it is).")
     add(f"- Plans containing a support step: {g['plans_with_support_step']}; in "
         f"{g['support_before_critical']} of them it comes before the first critical step, "
         f"which is where guided mode offers the agent handoff.")

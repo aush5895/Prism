@@ -142,12 +142,15 @@ export default function App() {
     setBusy(true)
     setBeat(2)
     setError(null)
+    // A new analysis ends any guided session: its plan belongs to the previous complaint.
+    setGuided(null)
     try {
       const data = await troubleshoot(text, target.siis_response)
       if (!data.envelope.meta.cache_hit) setLastColdMs(data.envelope.meta.latency_ms)
       setResult(data)
-      const hasPlan = Boolean(data.envelope.response?.contexts?.[0])
-      setBeat(opts.land ?? (hasPlan ? 3 : 6))
+      // An empty plan lands on Results too, which offers the agent handoff. It used to
+      // land on beat 6, left over from the removed row_1 "Honest Fallback" beat.
+      setBeat(opts.land ?? 3)
     } catch (e) {
       setError(e.message)
       setBeat(1)

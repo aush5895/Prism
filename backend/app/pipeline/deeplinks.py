@@ -243,7 +243,7 @@ class DeeplinkCatalog:
                       and e["id"] in self.unsupported_labels):
                     # Gate [4] asks whether a candidate is really about the step's target.
                     # A candidate whose own description does not support its label is not
-                    # the screen its label names: "Enable Grayscale" enables mono audio.
+                    # the screen its label names (docs/catalog_health.md §1.3).
                     verdict = "reject:label"            # gate [4]
                 else:
                     verdict = "eligible"

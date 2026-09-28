@@ -213,12 +213,13 @@ def _replay_grounding(debug_sink: Dict[str, Any], plan, cache) -> None:
     """On a cache hit, show how the plan was grounded when it was built.
 
     LIMITATIONS.md used to record that a hit left the grounding view blank, exactly when
-    the system is fastest. The spans are replayable because a hit requires the SAME
-    article: the evidence key is part of the cache key, so the text they index is the
-    text that was stored. Labelled as coming from the cold run, never as re-measured.
+    the system is fastest. The spans are replayed against the EXACT text they were
+    measured on, stored with the plan, never against the incoming request's copy: two
+    copies of one article can share an evidence key while differing in whitespace.
+    Labelled as coming from the cold run, never as re-measured.
     """
     grounding = plan.grounding
-    text = cache.article(plan.evidence_key)
+    text = cache.article(plan)
     if not grounding or text is None:
         return
     debug_sink["evidence"] = {"text": text, **grounding["evidence"]}
@@ -321,12 +322,11 @@ class GuidedConfirm(BaseModel):
 
 def _guided_call(session_id: str, verb: str, **kwargs) -> Dict[str, Any]:
     try:
-        session = guided.get_store().apply(session_id, verb, **kwargs)
+        return guided.get_store().apply_view(session_id, verb, **kwargs)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="unknown or expired session") from exc
     except guided.GuidedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return session.view()
 
 
 @app.post("/v1/guided/start")
@@ -336,8 +336,12 @@ def guided_start(req: TroubleshootRequest) -> Dict[str, Any]:
         envelope = run_pipeline(req).model_dump(exclude_none=False)
     except validate.ValidationError as exc:
         raise HTTPException(status_code=500, detail=f"response_refused: {exc}") from exc
-    article = ground.normalize_siis(req.siis_response)
-    session = guided.get_store().start(
+    # The SAME evidence the pipeline grounded on: the supplied article, or the fallback
+    # index's when none was supplied. Reading only the supplied article left the safety
+    # gate with no text to quote whenever a request came without one.
+    article = ground.ground(req.query, req.siis_response)
+    store = guided.get_store()
+    session = store.start(
         query=req.query,
         envelope=envelope,
         enrichment=enrich(req.query).model_dump(),
@@ -346,14 +350,14 @@ def guided_start(req: TroubleshootRequest) -> Dict[str, Any]:
     )
     # Catalog ids ride beside the envelope, as they do on /v1/troubleshoot/debug, so the
     # guided screen's proof panel can name the entry behind each link.
-    return {"session": session.view(), "envelope": envelope,
+    return {"session": store.view(session.session_id), "envelope": envelope,
             "catalog_ids": _catalog_ids_for(envelope["response"], get_catalog())}
 
 
 @app.get("/v1/guided/{session_id}")
 def guided_get(session_id: str) -> Dict[str, Any]:
     try:
-        return guided.get_store().get(session_id).view()
+        return guided.get_store().view(session_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="unknown or expired session") from exc
 

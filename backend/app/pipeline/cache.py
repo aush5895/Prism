@@ -115,6 +115,10 @@ class CachedPlan:
     # replay on a hit because a hit REQUIRES the same article (evidence_key), so the
     # spans still point at the text they were measured against.
     grounding: Optional[Dict[str, Any]] = None
+    # Identity of the EXACT article text the grounding's offsets index. Not evidence_key:
+    # that collapses whitespace, so two requests can share it while their texts differ
+    # by a few characters, and offsets from one would land in the wrong place in the other.
+    article_id: Optional[str] = None
 
 
 @dataclass
@@ -162,11 +166,16 @@ class SemanticCache:
         self._l0_latest: Dict[str, CachedPlan] = {}   # canonical -> newest plan, audit only
         self._keys: List[str] = []                    # L1 key text, row-aligned with...
         self._plans: List[CachedPlan] = []            # ...the plan each key points at
-        self._matrix: Optional[np.ndarray] = None     # (n, d) normalised, or None
+        self._matrix: Optional[np.ndarray] = None     # (n, d) view of _buf, or None
         self._encoded = 0                             # rows of _keys already in _matrix
-        self._evidence_rows: Optional[np.ndarray] = None   # article per row, for the mask
-        # Article text by evidence key, stored ONCE per article rather than per plan: the
-        # kit has 11 articles behind 20 rows, and a production corpus clusters the same way.
+        # Growable backing store for _matrix. np.vstack copied the WHOLE matrix on every
+        # append: 184 MB at the 120,000-key cap, on the first lookup after every store.
+        self._buf: Optional[np.ndarray] = None
+        self._row_evidence: List[Optional[str]] = []   # article per row, kept in step
+        self._evidence_rows: Optional[np.ndarray] = None   # ...as an array, for the mask
+        self._key_ids: set = set()                    # (key, article) pairs, for dedupe
+        # Article text by EXACT-text hash, stored once per distinct text rather than per
+        # plan: the kit has 11 articles behind 20 rows, and real traffic clusters the same way.
         self._articles: Dict[str, str] = {}
         self._embedder_failed = False                 # no backend; L1 off, L0 still on
 
@@ -231,25 +240,28 @@ class SemanticCache:
             model=model,
             evidence_key=evidence,
             grounding=grounding,
+            article_id=(hashlib.sha1(article_text.encode("utf-8")).hexdigest()
+                        if article_text else None),
         )
         seeds = self._seed_keys(enriched, query_variations)
         with self._lock:
-            if evidence and article_text:
-                self._articles.setdefault(evidence, article_text)
+            if plan.article_id:
+                self._articles.setdefault(plan.article_id, article_text)
             self._l0[(enriched.canonical, evidence)] = plan
             self._l0_latest[enriched.canonical] = plan
             self._evidence_rows = None
             added = 0
             # Deduplicate per ARTICLE. A paraphrase stored for one article must not stop
             # the same paraphrase being stored for another, or that article's row is
-            # simply absent from its own partition.
-            existing = {(k, p.evidence_key) for k, p in zip(self._keys, self._plans)}
+            # simply absent from its own partition. The pair set is kept incrementally:
+            # rebuilding it from every key cost O(n) per store under the lock.
             for key in seeds:
-                if (key, evidence) in existing:
+                if (key, evidence) in self._key_ids:
                     continue
                 self._keys.append(key)
                 self._plans.append(plan)
-                existing.add((key, evidence))
+                self._row_evidence.append(evidence)
+                self._key_ids.add((key, evidence))
                 added += 1
             self.stats["stores"] += 1
             self.stats["keys"] = len(self._keys)
@@ -273,10 +285,10 @@ class SemanticCache:
         return self.store(enriched, response, query_variations, model=model,
                           evidence=evidence, grounding=grounding, article_text=article_text)
 
-    def article(self, evidence: Optional[str]) -> Optional[str]:
-        """The article text a cached plan's spans were measured against."""
+    def article(self, plan: CachedPlan) -> Optional[str]:
+        """The exact article text a cached plan's spans were measured against."""
         with self._lock:
-            return self._articles.get(evidence) if evidence else None
+            return self._articles.get(plan.article_id) if plan.article_id else None
 
     @staticmethod
     def _seed_keys(enriched: EnrichedQuery, variations: Sequence[str]) -> List[str]:
@@ -301,26 +313,41 @@ class SemanticCache:
         size at which the 5,000-key cap is first reached. A corpus-dependent embedder
         (TF-IDF) is still rebuilt, because its existing rows are stale anyway.
         """
-        if len(self._keys) <= self._max_entries:
+        cap = self._cap()
+        if len(self._keys) <= cap:
             return
-        overflow = len(self._keys) - self._max_entries
+        # Evict in a BATCH down to a fraction of the cap, so the matrix is shifted once
+        # per few thousand stores rather than on every store once the cache is full.
+        overflow = len(self._keys) - int(cap * config.CACHE_EVICT_TO_FRACTION)
+        for key, evidence in zip(self._keys[:overflow], self._row_evidence[:overflow]):
+            self._key_ids.discard((key, evidence))
         self._keys = self._keys[overflow:]
         self._plans = self._plans[overflow:]
+        self._row_evidence = self._row_evidence[overflow:]
         self._evidence_rows = None
         corpus_dependent = bool(getattr(self._embedder, "corpus_dependent", True))
-        if self._matrix is not None and not corpus_dependent and self._encoded >= overflow:
-            # .copy() so the evicted rows' memory is released, not pinned by a view
-            self._matrix = self._matrix[overflow:].copy()
-            self._encoded -= overflow
+        if self._buf is not None and not corpus_dependent and self._encoded >= overflow:
+            keep = self._encoded - overflow
+            self._buf[:keep] = self._buf[overflow:self._encoded]   # numpy handles overlap
+            self._encoded = keep
+            self._matrix = self._buf[:keep] if keep else None
         else:
-            self._matrix = None
+            self._buf = self._matrix = None
             self._encoded = 0
         live = {id(p) for p in self._plans}
         self._l0 = {k: v for k, v in self._l0.items() if id(v) in live}
         self._l0_latest = {k: v for k, v in self._l0_latest.items() if id(v) in live}
-        referenced = {p.evidence_key for p in self._plans}
+        referenced = {p.article_id for p in self._plans}
         self._articles = {k: v for k, v in self._articles.items() if k in referenced}
         self.stats["keys"] = len(self._keys)
+
+    def _cap(self) -> int:
+        """Key cap. A corpus-dependent embedder (the TF-IDF fallback) refits on EVERY key
+        after a store, so it keeps the old, smaller cap: measured by independent review,
+        a refit took 3.1 s at 10,000 keys and 38.9 s at 120,000, all under the lock."""
+        if getattr(self._embedder, "corpus_dependent", False):
+            return min(self._max_entries, config.CACHE_MAX_ENTRIES_CORPUS_DEPENDENT)
+        return self._max_entries
 
     # ------------------------------------------------------------------ lookup
     def lookup(self, enriched: EnrichedQuery,
@@ -394,9 +421,8 @@ class SemanticCache:
 
     def _evidence_mask(self, evidence: Optional[str]) -> np.ndarray:
         """Boolean row mask: which stored keys belong to this article."""
-        if self._evidence_rows is None or len(self._evidence_rows) != len(self._plans):
-            self._evidence_rows = np.array([p.evidence_key for p in self._plans],
-                                           dtype=object)
+        if self._evidence_rows is None or len(self._evidence_rows) != len(self._row_evidence):
+            self._evidence_rows = np.array(self._row_evidence, dtype=object)
         return self._evidence_rows == evidence
 
     def _best_match(self, enriched: EnrichedQuery,
@@ -458,14 +484,25 @@ class SemanticCache:
 
         if embedder.corpus_dependent:
             embedder.fit(self._keys)
+            self._buf = None
             self._matrix = embedder.encode(self._keys)
             self._encoded = len(self._keys)
             return self._matrix
 
         fresh = embedder.encode(self._keys[self._encoded:])
-        self._matrix = (fresh if self._matrix is None or self._encoded == 0
-                        else np.vstack((self._matrix, fresh)))
-        self._encoded = len(self._keys)
+        need = self._encoded + fresh.shape[0]
+        if self._buf is None or self._buf.shape[1] != fresh.shape[1] \
+                or need > self._buf.shape[0]:
+            # Grow geometrically, so appends are amortised O(new rows), not O(all rows).
+            size = max(need, int((self._buf.shape[0] if self._buf is not None else 0) * 1.5),
+                       config.CACHE_MATRIX_MIN_ROWS)
+            grown = np.empty((size, fresh.shape[1]), dtype=fresh.dtype)
+            if self._buf is not None and self._encoded:
+                grown[:self._encoded] = self._buf[:self._encoded]
+            self._buf = grown
+        self._buf[self._encoded:need] = fresh
+        self._encoded = need
+        self._matrix = self._buf[:need]
         return self._matrix
 
     # ------------------------------------------------------------------ slot guard
@@ -527,7 +564,9 @@ class SemanticCache:
             self._evidence_rows = None
             self._keys.clear()
             self._plans.clear()
-            self._matrix = None
+            self._row_evidence.clear()
+            self._key_ids.clear()
+            self._buf = self._matrix = None
             self._encoded = 0
             self.hit_log.clear()
             for key in self.stats:

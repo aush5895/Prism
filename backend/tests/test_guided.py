@@ -313,6 +313,8 @@ def test_guided_mode_does_not_change_the_graded_response(client, row21):
     body = {"query": row21["original_query"], "siis_response": row21["siis_response"]}
     graded = client.post("/v1/troubleshoot", json=body).json()
     walked = client.post("/v1/guided/start", json=body).json()["envelope"]
+    # Both must be cold: were the second a cache hit, the equality would be trivial.
+    assert graded["meta"]["cache_hit"] is False and walked["meta"]["cache_hit"] is False
     assert walked["response"] == graded["response"]
     assert walked["query_variations"] == graded["query_variations"]
 
@@ -389,3 +391,75 @@ def test_an_immediate_handoff_does_not_claim_steps_failed():
     headline = session.view()["handoff"]["headline"]
     assert "not tried any of the 2 steps" in headline
     assert "None resolved" not in headline
+
+
+
+# ----------------------------------------------------------------- independent-review fixes
+def test_the_gate_quotes_the_evidence_the_plan_was_grounded_on(client, row21):
+    """REGRESSION, found by independent review. With no siis_response the pipeline grounds
+    on the fallback index, but the session read only the supplied article, so the factory
+    reset gate had nothing to quote and told the customer the article had no warning."""
+    session = client.post("/v1/guided/start",
+                          json={"query": row21["original_query"]}).json()["session"]
+    sid = session["session_id"]
+    quotes = None
+    for _ in range(20):
+        if session["status"] == "awaiting_confirmation":
+            gate = session["current"]["safety_gate"]
+            if gate["destructive"]:
+                quotes = gate["quotes"]
+                break
+            session = client.post(f"/v1/guided/{sid}/confirm", json={"proceed": True}).json()
+        if session["status"] == "active":
+            session = client.post(f"/v1/guided/{sid}/answer",
+                                  json={"outcome": "not_fixed"}).json()
+        elif session["status"] != "awaiting_confirmation":
+            break
+    assert quotes, "the fallback article's warning must reach the gate"
+
+
+@pytest.mark.parametrize("fallback, says", [
+    ("no_siis_context", "no knowledge article was available"),
+    ("no_match", "the article gave no steps"),
+    ("schema_repair_exhausted", "failed validation"),
+])
+def test_an_empty_plan_says_why_it_is_empty(fallback, says):
+    """REGRESSION, found by independent review. Every empty plan was handed off as 'the
+    supplied article does not answer this complaint', including when no article existed."""
+    store, session = _open({"response": {"contexts": []},
+                            "meta": {"cache_hit": False, "fallback": fallback}})
+    handoff = session.view()["handoff"]
+    assert says in handoff["reason_label"] and says in handoff["text"]
+    assert "supplied article does not" not in handoff["text"]
+
+
+def test_a_critical_steps_content_is_withheld_until_confirmed():
+    """REGRESSION, found by independent review. The docstring said withheld, the UI said
+    'we ask before showing it', but the steps and deeplinks were in the response."""
+    store, session = _open(_plan("critical"))
+    view = session.view()["current"]
+    assert view["withheld"] is True and "stepGroups" not in view["action"]
+    store.apply(session.session_id, "confirm", proceed=True)
+    view = session.view()["current"]
+    assert view["withheld"] is False and view["action"]["stepGroups"]
+
+
+def test_an_expired_session_is_gone_on_read():
+    """REGRESSION, found by independent review: the TTL was only applied by the next start."""
+    store = SessionStore(max_sessions=10, ttl_s=60)
+    _, session = _open(_plan("auto"), store=store)
+    session.updated_at -= 3600
+    with pytest.raises(KeyError):
+        store.get(session.session_id)
+
+
+def test_a_gate_quote_is_always_a_whole_sentence():
+    """REGRESSION, found by independent review. Splitting on every full stop turned
+    'example.com/x) if you lose your data.' into a quote under 'From Samsung's article'."""
+    action = {"actionName": "Factory Data Reset", "category": "critical",
+              "stepGroups": [{"steps": ["Tap Factory data reset."]}]}
+    article = ("Open Settings. Tap Factory data reset. See the guide at example.com/help if "
+               "you lose your data. Back up your personal data first, e.g. photos.")
+    for quote in guided.safety_notice(action, article)["quotes"]:
+        assert quote[:1].isupper() and quote[-1] in ".!?", quote
+        assert quote in article

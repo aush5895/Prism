@@ -410,7 +410,8 @@ def test_a_full_cache_does_not_re_encode_every_key_on_each_store():
         cache.store(enrich(f"Galaxy S22 screen issue {i}"), _plan(),
                     [f"screen variant {i} a", f"screen variant {i} b"])
         cache.lookup(enrich("Galaxy S22 screen"))
-    assert len(cache._keys) == 12, "precondition: the cache must be at its cap"
+    assert cache.stats["stores"] == 6 and len(cache._keys) <= 12, \
+        "precondition: the cache has filled and evicted"
 
     embedder.encoded.clear()
     cache.store(enrich("Galaxy S22 touch issue new"), _plan(), ["touch variant new"])
@@ -529,7 +530,7 @@ def test_each_article_is_stored_once_however_many_plans_cite_it(cache):
         cache.store(enrich(f"Galaxy S22 {text} {i}"), _plan(), [text], evidence=article,
                     grounding={"spans": []}, article_text="Touchscreen article body")
     assert cache.snapshot()["articles"] == 1
-    assert cache.article(article) == "Touchscreen article body"
+    assert cache.article(cache._plans[0]) == "Touchscreen article body"
 
 
 def test_eviction_drops_an_article_no_plan_cites_any_more():
@@ -540,5 +541,104 @@ def test_eviction_drops_an_article_no_plan_cites_any_more():
     for i in range(4):
         small.store(enrich(f"Galaxy S22 battery drain {i}"), _plan(), [f"battery {i}"],
                     evidence=new, article_text="New article")
-    assert small.article(old) is None
-    assert small.article(new) == "New article"
+    live = {p.article_id for p in small._plans}
+    assert len(small._articles) == len(live), "an article no plan cites must be dropped"
+    assert all(small.article(p) == "New article" for p in small._plans)
+
+
+def test_replayed_spans_index_the_exact_text_they_were_measured_on(row21):
+    """REGRESSION, found by independent review. Stored articles were keyed by evidence_key,
+    which collapses whitespace. A second cold plan for the same article with different
+    whitespace stored offsets into ITS text, but a later hit replayed them against the
+    FIRST text: 3 of 3 spans misaligned in the reviewer's reproduction."""
+    from app.contracts import TroubleshootRequest
+    from app.llm.replay import ReplayProvider
+    from app.main import run_pipeline
+
+    provider = ReplayProvider(FIXTURES / "extraction_row21.json")
+    original = row21["siis_response"]
+    spaced = {"title": original["title"],
+              "content": original["content"].replace(". ", ".  ", 40).replace("\n", "\r\n")}
+    assert evidence_key(spaced) == evidence_key(original), "precondition: same evidence key"
+
+    run_pipeline(TroubleshootRequest(query=row21["original_query"], siis_response=original),
+                 provider=provider, use_cache=True)
+    other = TroubleshootRequest(query="zzqx completely unrelated wording 12345",
+                                siis_response=spaced)
+    cold, warm = {}, {}
+    first = run_pipeline(other, provider=provider, debug_sink=cold, use_cache=True)
+    second = run_pipeline(other, provider=provider, debug_sink=warm, use_cache=True)
+    assert second.meta.cache_hit is True
+    served = second.meta.cache_hit and warm["evidence"]["text"]
+    for span_c, span_w in zip(cold.get("spans") or warm["spans"], warm["spans"]):
+        if span_w.get("start") is None:
+            continue
+        # whatever plan was served, its spans must quote the text returned beside them
+        quoted = served[span_w["start"]:span_w["end"]]
+        assert quoted.strip(), "a replayed span points at empty text"
+    if not first.meta.cache_hit:
+        # the second request hit the plan the first one stored: same text, same quotes
+        assert warm["evidence"]["text"] == cold["evidence"]["text"]
+        for c, w in zip(cold["spans"], warm["spans"]):
+            if c.get("start") is not None:
+                assert (warm["evidence"]["text"][w["start"]:w["end"]]
+                        == cold["evidence"]["text"][c["start"]:c["end"]])
+
+
+
+def test_a_store_into_a_full_cache_does_not_copy_the_whole_matrix():
+    """REGRESSION, found by independent review. At the 120,000-key cap every store evicted
+    and np.vstack copied the whole matrix on every append: 184 MB per store. Eviction now
+    runs in batches and the matrix grows in place, so most stores touch neither."""
+    cache = SemanticCache(embedder=FakeEmbedder(), similarity_min=0.9, max_entries=40)
+    buffers = set()
+    for i in range(60):
+        cache.store(enrich(f"Galaxy S22 screen issue {i}"), _plan(), [f"screen variant {i}"])
+        cache.lookup(enrich("Galaxy S22 screen"))
+        buffers.add(id(cache._buf))
+    assert len(buffers) <= 4, f"the backing buffer was reallocated {len(buffers)} times"
+    rebuilt = FakeEmbedder().encode(cache._keys)
+    assert np.allclose(cache._ensure_matrix(), rebuilt)
+    assert len(cache._key_ids) == len(cache._keys)
+
+
+def test_the_tfidf_fallback_keeps_the_small_cap(monkeypatch):
+    """A corpus-dependent embedder refits on every key after a store (independent review:
+    38.9 s at 120,000 keys), so it must not inherit the MiniLM-sized cap."""
+    from app import config as cfg
+    from app.pipeline.embeddings import TfidfSvdEmbedder
+
+    monkeypatch.setattr(cfg, "CACHE_MAX_ENTRIES_CORPUS_DEPENDENT", 20)
+    cache = SemanticCache(embedder=TfidfSvdEmbedder(), similarity_min=0.1, max_entries=1000)
+    for i in range(30):
+        cache.store(enrich(f"Galaxy S22 screen issue {i}"), _plan(), [f"screen lag {i}"])
+    assert len(cache._keys) <= 20
+
+
+def test_rows_keys_plans_and_articles_stay_aligned_under_random_traffic():
+    """Seeded fuzz over store, evict and lookup. After every operation each row of the
+    matrix must be the encoding of its key, and each key's article must be its plan's;
+    otherwise a lookup could score one key and return another key's plan."""
+    import random
+    rng = random.Random(7)
+    embedder = FakeEmbedder()
+    cache = SemanticCache(embedder=embedder, similarity_min=0.5, max_entries=25)
+    articles = [evidence_key(f"article {i}") for i in range(4)]
+    words = ["screen", "touch", "lag", "battery", "drain", "camera", "blurry", "sound"]
+    for step in range(400):
+        text = " ".join(rng.sample(words, 3))
+        art = rng.choice(articles)
+        if rng.random() < 0.5:
+            cache.store(enrich(f"Galaxy S22 {text} {step}"), _plan(f"Plan {step}"),
+                        [text, f"{text} again"], evidence=art)
+        else:
+            result = cache.lookup(enrich(f"Galaxy S22 {text}"), evidence=art)
+            if result.hit:
+                assert result.plan.evidence_key == art, "served another article's plan"
+        matrix = cache._ensure_matrix()
+        if matrix is not None:
+            assert matrix.shape[0] == len(cache._keys) == len(cache._plans) \
+                == len(cache._row_evidence)
+            assert np.allclose(matrix, embedder.encode(cache._keys))
+        assert all(p.evidence_key == e for p, e in zip(cache._plans, cache._row_evidence))
+        assert cache._key_ids == set(zip(cache._keys, cache._row_evidence))

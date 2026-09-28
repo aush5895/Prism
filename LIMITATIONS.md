@@ -200,7 +200,10 @@ overstate it.
 - **Three scaling bugs, found by the 10k scale run (FIXED).** (1) Once the cache reached
   its key cap, every store evicted, and eviction discarded the whole L1 matrix, so every
   lookup after a store re-encoded every key: store-then-hit p95 went from 40 ms at 1,000
-  synthetic scenarios to 24,074 ms at 5,000. Eviction now slices the matrix. (2) The
+  synthetic scenarios to 24,074 ms at 5,000 (`evaluation/scale.py`, MiniLM, 24 Sep, before
+  the fix). Eviction now shifts the matrix in place, in batches down to 90% of the cap,
+  and the matrix grows in place instead of being copied on every append. The TF-IDF
+  fallback keeps a 5,000-key cap, because it refits on every key after each store. (2) The
   article was checked after the search instead of partitioning it: L0 held one plan per
   canonical query, so two articles receiving the same words overwrote each other, and L1
   took the nearest key across every article, then missed if it belonged to another one.
@@ -217,8 +220,11 @@ overstate it.
   *equivalent* hit, matching how `run_eval` scores same-article hits, and keeps the
   strictest count in `report.json`.
 - **A cache hit replays the grounding of the cold run that built the plan (FIXED: it
-  used to show none).** Sound because a hit requires the same article, so the spans index
-  the same text. Both engineer-view panels label replayed data as such.
+  used to show none).** The spans are replayed against the exact text they were measured
+  on, stored with the plan. Replaying against the incoming request's copy was the first
+  version, and independent review showed it was wrong: two copies of one article can
+  share an evidence key while differing in whitespace, and the reviewer's reproduction
+  misaligned 3 of 3 spans. Both engineer-view panels label replayed data as such.
 
 ### 2.5 The catalog URIs are masked and cannot launch anything
 

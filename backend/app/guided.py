@@ -70,7 +70,15 @@ NOT_ATTEMPTED = frozenset({SKIPPED, DECLINED})
 # Why a session ended in a handoff.
 REASON_EXHAUSTED = "plan_exhausted"
 REASON_REQUESTED = "customer_requested"
-REASON_NO_PLAN = "article_cannot_answer"
+REASON_NO_PLAN = "no_plan"
+# Why a pipeline returned no plan, keyed by the envelope's `meta.fallback` (contract §3.3).
+# The handoff must say which: "the article cannot answer this" is false when no article
+# was available, or when a plan was built and then failed validation.
+_NO_PLAN_REASONS = {
+    "no_match": "the article gave no steps for this complaint",
+    "no_siis_context": "no knowledge article was available for this complaint",
+    "schema_repair_exhausted": "the plan failed validation, so none was shown",
+}
 
 
 class GuidedError(Exception):
@@ -78,12 +86,28 @@ class GuidedError(Exception):
 
 
 # ----------------------------------------------------------------- safety gate
-_SENTENCE = re.compile(r"[^.!?\n]+[.!?]?")
+# A sentence ends at . ! or ? FOLLOWED BY whitespace or the end, or at a line break. The
+# old pattern split on every full stop, so "example.com" or "e.g." cut a sentence in two
+# and a fragment could be shown under "From Samsung's article".
+_SENTENCE = re.compile(r"(?:[^\n.!?]|[.!?](?=\S))+(?:[.!?](?=\s|$))?")
+
+
+def _is_whole_sentence(text: str) -> bool:
+    """A quote must read as a sentence: starts with a capital or digit, ends with . ! ?"""
+    text = text.strip()
+    return (len(text) >= config.GUIDED_MIN_QUOTE_CHARS and text[:1].isupper()
+            or text[:1].isdigit()) and text[-1:] in ".!?"
 
 
 def _sentences(article: str) -> List[Tuple[int, int, str]]:
-    return [(m.start(), m.end(), m.group().strip())
-            for m in _SENTENCE.finditer(article or "") if m.group().strip()]
+    out = []
+    for m in _SENTENCE.finditer(article or ""):
+        raw = m.group()
+        text = raw.strip()
+        if text:
+            lead = len(raw) - len(raw.lstrip())
+            out.append((m.start() + lead, m.start() + lead + len(text), text))
+    return out
 
 
 def _anchors(action: Dict[str, Any], article: str) -> List[Tuple[int, int]]:
@@ -156,6 +180,8 @@ def safety_notice(action: Dict[str, Any], article: str) -> Dict[str, Any]:
         if contains_any(sentence, terms) is None:
             continue
         if sentence.lower().rstrip(".") in own_steps:
+            continue
+        if not _is_whole_sentence(sentence):
             continue
         distance = min(max(0, a_start - end, start - a_end) for a_start, a_end in anchors)
         if distance <= window:
@@ -258,8 +284,14 @@ class GuidedSession:
         if self.status not in (ACTIVE, AWAITING_CONFIRMATION):
             return None
         action = self.actions[self.cursor]
+        if self.status == AWAITING_CONFIRMATION:
+            # WITHHELD until confirmed: the name and category are enough to ask the
+            # question, and the steps and deeplinks are what the gate is protecting.
+            shown = {k: action.get(k) for k in ("actionName", "category", "description")}
+        else:
+            shown = action
         view: Dict[str, Any] = {
-            "index": self.cursor, "action": action,
+            "index": self.cursor, "action": shown, "withheld": shown is not action,
             "support_step": is_support_step(action),
             # How many last-resort steps still follow this one. At the support step it is
             # the reason to offer an agent now rather than later.
@@ -301,7 +333,7 @@ _REASON_LABEL = {
     # Not "every step was tried": a declined or skipped step was not.
     REASON_EXHAUSTED: "the plan ran out of steps",
     REASON_REQUESTED: "the customer asked for an agent",
-    REASON_NO_PLAN: "the supplied article does not answer this complaint",
+    REASON_NO_PLAN: "no plan was produced for this complaint",
 }
 
 
@@ -326,13 +358,14 @@ def build_handoff(session: GuidedSession) -> Dict[str, Any]:
                                            for g in act.get("stepGroups") or [])}
                  for i, act in enumerate(session.actions) if i not in attempted]
     reason = session.end_reason or (REASON_NO_PLAN if session.status == NO_PLAN else None)
+    reason_label = (_NO_PLAN_REASONS.get(session.fallback or "", _REASON_LABEL[REASON_NO_PLAN])
+                    if reason == REASON_NO_PLAN else _REASON_LABEL.get(reason, reason))
     total = len(session.actions)
 
     declined = sum(1 for t in tried if t["outcome"] == DECLINED)
     skipped = sum(1 for t in tried if t["outcome"] == SKIPPED)
     if session.status == NO_PLAN:
-        headline = ("No plan: the supplied article does not cover this complaint. "
-                    "Nothing was attempted.")
+        headline = f"No plan: {reason_label}. Nothing was attempted."
     else:
         # "Tried" must not include a step the customer refused or skipped: an agent
         # reading "tried 10 of 10" would assume the factory reset had been done.
@@ -359,7 +392,7 @@ def build_handoff(session: GuidedSession) -> Dict[str, Any]:
         lines.append(f"Symptoms: {', '.join(_clean(s) for s in session.symptoms)}")
     if session.article_title:
         lines.append(f"Knowledge article: {_clean(session.article_title)}")
-    lines.append(f"Why handed off: {_REASON_LABEL.get(reason, reason or 'unknown')}")
+    lines.append(f"Why handed off: {reason_label}")
     lines.append(headline)
     if tried:
         lines.append("Step by step:")
@@ -370,7 +403,7 @@ def build_handoff(session: GuidedSession) -> Dict[str, Any]:
 
     return {
         "reason": reason,
-        "reason_label": _REASON_LABEL.get(reason, reason),
+        "reason_label": reason_label,
         "headline": headline,
         "complaint": _clean(session.query),
         "device": session.device,
@@ -439,9 +472,18 @@ class SessionStore:
     def get(self, session_id: str) -> GuidedSession:
         with self._lock:
             session = self._sessions.get(session_id)
+            if session is not None and session.updated_at < time.time() - self._ttl:
+                del self._sessions[session_id]          # expired: gone, not just unpruned
+                session = None
         if session is None:
             raise KeyError(session_id)
         return session
+
+    def view(self, session_id: str) -> Dict[str, Any]:
+        """A session's view, built under the lock so a concurrent answer cannot move the
+        cursor between reading it and reading the action it points at."""
+        with self._lock:
+            return self.get(session_id).view()
 
     def apply(self, session_id: str, verb: str, **kwargs) -> GuidedSession:
         """Run one transition under the store lock and count terminal outcomes once."""
@@ -454,6 +496,11 @@ class SessionStore:
                 if session.status == RESOLVED and session.resolved_by is not None:
                     self.counters["steps_to_resolution_total"] += session.resolved_by + 1
             return session
+
+    def apply_view(self, session_id: str, verb: str, **kwargs) -> Dict[str, Any]:
+        """One transition and the resulting view, atomically. The API uses this."""
+        with self._lock:
+            return self.apply(session_id, verb, **kwargs).view()
 
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
