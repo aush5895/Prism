@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-09-28T13:59:21Z",
+  "generated_at_utc": "2026-09-28T18:20:01Z",
   "provider_requested": "stub",
   "catalog": {
     "n_entries": 578,
@@ -112,9 +112,9 @@
     "auto_step_groups": 0,
     "auto_step_groups_with_deeplink": 0,
     "auto_step_groups_with_deeplink_pct": 0.0,
-    "latency_p50_ms": 2.0,
-    "latency_p95_ms": 11.8,
-    "latency_mean_ms": 3.9,
+    "latency_p50_ms": 1.5,
+    "latency_p95_ms": 10.9,
+    "latency_mean_ms": 3.3,
     "total_cost_usd": 0.0,
     "per_row": [
       {
@@ -130,7 +130,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 12.5
+        "latency_ms": 11.7,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_2",
@@ -145,7 +152,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 2.5
+        "latency_ms": 2.0,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_3",
@@ -160,7 +174,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": "no_match",
-        "latency_ms": 0.7
+        "latency_ms": 0.7,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_4",
@@ -175,7 +196,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 1.4
+        "latency_ms": 1.5,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_5",
@@ -190,7 +218,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 2.2
+        "latency_ms": 1.3,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_7",
@@ -205,7 +240,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 8.6
+        "latency_ms": 7.0,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_8",
@@ -220,7 +262,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 11.2
+        "latency_ms": 7.8,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_9",
@@ -235,7 +284,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 1.9
+        "latency_ms": 1.2,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_10",
@@ -250,7 +306,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 2.0
+        "latency_ms": 1.2,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_11",
@@ -265,7 +328,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": "no_match",
-        "latency_ms": 0.9
+        "latency_ms": 0.6,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_12",
@@ -280,7 +350,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 6.9
+        "latency_ms": 7.1,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_13",
@@ -295,7 +372,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 1.6
+        "latency_ms": 1.8,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_14",
@@ -310,7 +394,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": "no_match",
-        "latency_ms": 0.5
+        "latency_ms": 0.5,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_15",
@@ -325,7 +416,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 3.1
+        "latency_ms": 1.6,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_16",
@@ -340,7 +438,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 1.5
+        "latency_ms": 1.5,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_17",
@@ -355,7 +460,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": "no_match",
-        "latency_ms": 0.6
+        "latency_ms": 0.6,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_19",
@@ -370,7 +482,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": "no_match",
-        "latency_ms": 0.6
+        "latency_ms": 0.6,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_20",
@@ -385,7 +504,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 5.9
+        "latency_ms": 5.5,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_21",
@@ -400,7 +526,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 11.8
+        "latency_ms": 10.9,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       },
       {
         "id": "row_22",
@@ -415,7 +548,14 @@
         "url_leak": false,
         "catalog_invalid": 0,
         "fallback": null,
-        "latency_ms": 1.4
+        "latency_ms": 1.3,
+        "article_fit": {
+          "fit": "unknown",
+          "covered": 0,
+          "total": 0,
+          "unverified_claims": 0,
+          "issues": []
+        }
       }
     ]
   },
@@ -838,8 +978,8 @@
         "l1_hits": 24,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.4,
-        "lookup_l1_p95_ms": 1.6
+        "lookup_l1_p50_ms": 0.9,
+        "lookup_l1_p95_ms": 1.1
       },
       {
         "threshold": 0.45,
@@ -859,8 +999,8 @@
         "l1_hits": 24,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.3,
-        "lookup_l1_p95_ms": 1.4
+        "lookup_l1_p50_ms": 0.9,
+        "lookup_l1_p95_ms": 1.0
       },
       {
         "threshold": 0.5,
@@ -880,8 +1020,8 @@
         "l1_hits": 24,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.0,
-        "lookup_l1_p95_ms": 6.4
+        "lookup_l1_p50_ms": 0.9,
+        "lookup_l1_p95_ms": 5.1
       },
       {
         "threshold": 0.55,
@@ -901,8 +1041,8 @@
         "l1_hits": 24,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.0,
-        "lookup_l1_p95_ms": 1.2
+        "lookup_l1_p50_ms": 0.9,
+        "lookup_l1_p95_ms": 5.0
       },
       {
         "threshold": 0.6,
@@ -943,8 +1083,8 @@
         "l1_hits": 24,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.4,
-        "lookup_l1_p95_ms": 1.5
+        "lookup_l1_p50_ms": 0.9,
+        "lookup_l1_p95_ms": 1.1
       },
       {
         "threshold": 0.7,
@@ -964,8 +1104,8 @@
         "l1_hits": 24,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.4,
-        "lookup_l1_p95_ms": 1.5
+        "lookup_l1_p50_ms": 0.9,
+        "lookup_l1_p95_ms": 1.3
       },
       {
         "threshold": 0.75,
@@ -985,8 +1125,8 @@
         "l1_hits": 24,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.4,
-        "lookup_l1_p95_ms": 1.5
+        "lookup_l1_p50_ms": 0.9,
+        "lookup_l1_p95_ms": 5.1
       },
       {
         "threshold": 0.8,
@@ -1006,7 +1146,7 @@
         "l1_hits": 24,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.4,
+        "lookup_l1_p50_ms": 0.9,
         "lookup_l1_p95_ms": 1.6
       },
       {
@@ -1027,8 +1167,8 @@
         "l1_hits": 24,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 0.9,
-        "lookup_l1_p95_ms": 5.2
+        "lookup_l1_p50_ms": 1.3,
+        "lookup_l1_p95_ms": 5.6
       },
       {
         "threshold": 0.9,
@@ -1048,8 +1188,8 @@
         "l1_hits": 24,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.4,
-        "lookup_l1_p95_ms": 12.2
+        "lookup_l1_p50_ms": 0.9,
+        "lookup_l1_p95_ms": 1.0
       }
     ],
     "holdout": {
@@ -1071,8 +1211,8 @@
         "l1_hits": 32,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.1,
-        "lookup_l1_p95_ms": 3.4,
+        "lookup_l1_p50_ms": 0.9,
+        "lookup_l1_p95_ms": 1.0,
         "false_positive_examples": []
       },
       "0.6": {
@@ -1093,8 +1233,8 @@
         "l1_hits": 32,
         "lookup_l0_p50_ms": 0.0,
         "lookup_l0_p95_ms": 0.0,
-        "lookup_l1_p50_ms": 1.5,
-        "lookup_l1_p95_ms": 5.8,
+        "lookup_l1_p50_ms": 0.9,
+        "lookup_l1_p95_ms": 5.3,
         "false_positive_examples": []
       }
     },
@@ -1116,8 +1256,8 @@
       "l1_hits": 32,
       "lookup_l0_p50_ms": 0.0,
       "lookup_l0_p95_ms": 0.0,
-      "lookup_l1_p50_ms": 1.5,
-      "lookup_l1_p95_ms": 5.8,
+      "lookup_l1_p50_ms": 0.9,
+      "lookup_l1_p95_ms": 5.3,
       "false_positive_examples": []
     },
     "unguarded_holdout": {
@@ -1138,26 +1278,26 @@
       "lookup_l0_p50_ms": 0.0,
       "lookup_l0_p95_ms": 0.0,
       "lookup_l1_p50_ms": 1.0,
-      "lookup_l1_p95_ms": 5.3
+      "lookup_l1_p95_ms": 1.1
     },
     "latency": {
       "l0_samples": 15,
       "l1_samples": 56,
       "l0_p50_ms": 0.2,
-      "l0_p95_ms": 0.4,
-      "l1_p50_ms": 1.1,
-      "l1_p95_ms": 1.2,
-      "all_hits_p50_ms": 1.1,
-      "all_hits_p95_ms": 1.2
+      "l0_p95_ms": 0.3,
+      "l1_p50_ms": 1.0,
+      "l1_p95_ms": 1.7,
+      "all_hits_p50_ms": 0.9,
+      "all_hits_p95_ms": 1.7
     },
     "interleaved_latency": {
       "samples": 15,
       "keys_at_end": 255,
-      "p50_ms": 77.9,
-      "p95_ms": 102.0
+      "p50_ms": 69.0,
+      "p95_ms": 149.7
     },
-    "cold_p50_ms": 2.0,
-    "cold_p95_ms": 11.8,
+    "cold_p50_ms": 1.5,
+    "cold_p95_ms": 10.9,
     "llm_calls_avoided": 32,
     "llm_calls_without_cache": 32,
     "target_hit_rate_pct": 80.0,
@@ -1336,5 +1476,199 @@
       }
     ]
   },
-  "wall_clock_s": 30.8
+  "article_fit": {
+    "judged_rows": 0,
+    "unknown_rows": 20,
+    "phase0_wrong_judged": 0,
+    "phase0_wrong_flagged": 0,
+    "phase0_wrong_none": 0,
+    "unflagged_judged": 0,
+    "unflagged_full": 0,
+    "unflagged_partial": 0,
+    "unflagged_none": 0,
+    "unverified_claims": 0,
+    "per_row": [
+      {
+        "id": "row_1",
+        "phase0": "wrong",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_2",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_3",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_4",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_5",
+        "phase0": "marginal",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_7",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_8",
+        "phase0": "wrong",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_9",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_10",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_11",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_12",
+        "phase0": "wrong",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_13",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_14",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_15",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_16",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_17",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_19",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_20",
+        "phase0": "wrong",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_21",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      },
+      {
+        "id": "row_22",
+        "phase0": "not flagged",
+        "fit": "unknown",
+        "covered": 0,
+        "total": 0,
+        "unverified": 0,
+        "uncovered": []
+      }
+    ]
+  },
+  "wall_clock_s": 27.4
 }

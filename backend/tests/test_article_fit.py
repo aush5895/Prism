@@ -147,3 +147,27 @@ def test_the_prompt_asks_for_coverage_with_quoted_evidence():
     item = EXTRACTION_JSON_SCHEMA["properties"]["complaint_issues"]["items"]
     assert set(item["required"]) == {"issue", "covered", "evidence"}
     assert "character for character" in SYSTEM_PROMPT
+
+
+# ----------------------------------------------------------------- evaluation
+def test_the_fit_evaluation_never_scores_unflagged_rows_as_known_correct(repo_root):
+    """Phase 0 listed only the pairings it judged wrong. An unlisted row is reported as
+    'not flagged', and a row the provider could not judge is 'unknown', not a miss."""
+    import sys
+    sys.path.insert(0, str(repo_root))
+    from evaluation.run_eval import _render_article_fit, run_article_fit_eval
+
+    def row(rid, fit, covered, total):
+        return {"id": rid, "article_fit": {"fit": fit, "covered": covered, "total": total,
+                                           "unverified_claims": 0, "issues": []}}
+
+    per_row = [row("row_1", "none", 0, 1), row("row_8", "full", 1, 1),
+               row("row_2", "partial", 1, 2), row("row_3", "unknown", 0, 0)]
+    result = run_article_fit_eval(per_row)
+    assert result["judged_rows"] == 3 and result["unknown_rows"] == 1
+    assert (result["phase0_wrong_judged"], result["phase0_wrong_flagged"]) == (2, 1)
+    assert result["unflagged_partial"] == 1
+    lines = []
+    _render_article_fit(lines.append, result, "test:fixture")
+    text = "\n".join(lines)
+    assert "not \"known correct\"" in text and "4 rows is a small sample" in text

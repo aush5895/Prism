@@ -252,6 +252,7 @@ def run_compliance(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any
             "catalog_invalid": len(row_invalid),
             "fallback": env.meta.fallback,
             "latency_ms": round(elapsed_ms, 1),
+            "article_fit": _fit_summary(env.meta.article_fit),
         })
 
     n = len(per_row)
@@ -753,6 +754,53 @@ def run_cache_eval(plans: Sequence[Dict[str, Any]], cold_latencies: Sequence[flo
     }
 
 
+def _fit_summary(fit: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not fit:
+        return {"fit": None, "covered": 0, "total": 0, "unverified_claims": 0, "issues": []}
+    return {"fit": fit["fit"], "covered": fit["covered"], "total": fit["total"],
+            "unverified_claims": fit.get("unverified_claims", 0),
+            "issues": [{"issue": i["issue"], "covered": i["covered"],
+                        "quote_found": i["quote_found"]} for i in fit.get("issues", [])]}
+
+
+# ----------------------------------------------------------------- article fit
+PAIRING_VERDICTS_PATH = ROOT / "evaluation" / "pairing_verdicts.json"
+
+
+def run_article_fit_eval(per_row: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Article fit per row, beside the team's Phase 0 pairing verdicts.
+
+    Those verdicts are OUR reading of Samsung's data, made before this feature existed,
+    and cover only the pairings Phase 0 judged wrong or marginal. A row Phase 0 did not
+    list was not verified as correct, so the "not flagged" group is reported, never
+    scored as a set of known negatives.
+    """
+    verdicts = json.loads(PAIRING_VERDICTS_PATH.read_text(encoding="utf-8"))["verdicts"]
+    rows = []
+    for r in per_row:
+        f = r.get("article_fit") or {}
+        rows.append({"id": r["id"], "phase0": verdicts.get(r["id"], "not flagged"),
+                     "fit": f.get("fit") or "no extraction", "covered": f.get("covered", 0),
+                     "total": f.get("total", 0), "unverified": f.get("unverified_claims", 0),
+                     "uncovered": [i["issue"] for i in f.get("issues", []) if not i["covered"]]})
+    judged = [r for r in rows if r["fit"] in ("full", "partial", "none")]
+    wrong = [r for r in judged if r["phase0"] == "wrong"]
+    unflagged = [r for r in judged if r["phase0"] == "not flagged"]
+    return {
+        "judged_rows": len(judged),
+        "unknown_rows": len(rows) - len(judged),
+        "phase0_wrong_judged": len(wrong),
+        "phase0_wrong_flagged": sum(1 for r in wrong if r["fit"] in ("none", "partial")),
+        "phase0_wrong_none": sum(1 for r in wrong if r["fit"] == "none"),
+        "unflagged_judged": len(unflagged),
+        "unflagged_full": sum(1 for r in unflagged if r["fit"] == "full"),
+        "unflagged_partial": sum(1 for r in unflagged if r["fit"] == "partial"),
+        "unflagged_none": sum(1 for r in unflagged if r["fit"] == "none"),
+        "unverified_claims": sum(r["unverified"] for r in rows),
+        "per_row": rows,
+    }
+
+
 # ----------------------------------------------------------------- guided mode
 def run_guided_eval(plans: Sequence[Dict[str, Any]],
                     per_row: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
@@ -818,6 +866,7 @@ def build_report(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any]:
     plans = compliance.pop("_plans", [])
     cache_eval = run_cache_eval(plans, [r["latency_ms"] for r in compliance["per_row"]])
     guided_eval = run_guided_eval(plans, compliance["per_row"])
+    fit_eval = run_article_fit_eval(compliance["per_row"])
     return {
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "provider_requested": provider_name,
@@ -840,6 +889,7 @@ def build_report(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any]:
         "scope_fields_comparison": run_scope_field_comparison(cases),
         "cache": cache_eval,
         "guided": guided_eval,
+        "article_fit": fit_eval,
     }
 
 
@@ -1174,6 +1224,8 @@ def render_metrics(report: Dict[str, Any]) -> str:
     add("")
     if report.get("guided"):
         _render_guided(add, report["guided"])
+    if report.get("article_fit"):
+        _render_article_fit(add, report["article_fit"], c["provider"])
 
     # ---- 7
     add("## 7. Limitations")
@@ -1222,6 +1274,44 @@ def render_metrics(report: Dict[str, Any]) -> str:
     if scale and scale.get("by_size"):
         _render_scale(add, scale)
     return "\n".join(lines) + "\n"
+
+
+def _render_article_fit(add, a: Dict[str, Any], provider: str) -> None:
+    """Section 6.2. Counted from the same 20-row run as section 6; nothing typed here."""
+    add("### 6.2 Article fit over the same rows")
+    add("")
+    add("Does the supplied article cover each problem the customer described? Judged by "
+        "the one extraction call and believed only where its quoted sentence is found in "
+        f"the article (`pipeline/article_fit.py`). Provider: `{provider}`.")
+    add("")
+    if not a["judged_rows"]:
+        add(f"No row was judged ({a['unknown_rows']} unknown): this provider cannot judge "
+            "coverage. Run `python -m evaluation.run_eval --provider gemini` for this "
+            "section.")
+        add("")
+        return
+    add("Compared with the pairing verdicts in `evaluation/pairing_verdicts.json`, which are "
+        "the team's own Phase 0 reading of Samsung's data, not Samsung labels. Phase 0 "
+        "listed only the pairings it judged wrong or marginal, so an unlisted row is "
+        f"\"not flagged\", not \"known correct\". "
+        f"{a['judged_rows'] + a['unknown_rows']} rows is a small sample.")
+    add("")
+    add(f"- Rows judged: {a['judged_rows']} of {a['judged_rows'] + a['unknown_rows']}.")
+    add(f"- Pairings Phase 0 judged wrong: the engine reported partial or no coverage for "
+        f"{a['phase0_wrong_flagged']} of {a['phase0_wrong_judged']} "
+        f"(no coverage for {a['phase0_wrong_none']}).")
+    add(f"- Pairings Phase 0 did not flag: {a['unflagged_full']} full, "
+        f"{a['unflagged_partial']} partial, {a['unflagged_none']} none, of "
+        f"{a['unflagged_judged']}. A multi-problem complaint can legitimately be partial.")
+    add(f"- \"Covered\" claims whose quote was not found in the article, and so were not "
+        f"believed: {a['unverified_claims']}.")
+    add("")
+    add("| Row | Phase 0 verdict | Fit | Covered | Not covered |")
+    add("| --- | --- | --- | ---: | --- |")
+    for r in a["per_row"]:
+        add(f"| {r['id']} | {r['phase0']} | {r['fit']} | {r['covered']}/{r['total']} | "
+            f"{'; '.join(r['uncovered']) or '-'} |")
+    add("")
 
 
 def _render_guided(add, g: Dict[str, Any]) -> None:

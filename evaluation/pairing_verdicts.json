@@ -1,0 +1,10 @@
+{
+  "_readme": "Complaint-to-article pairing verdicts for the supplied kit, from docs/PHASE0_REQUIREMENTS_ANALYSIS.md section 4.3 (the table under 'Critical finding - the supplied pairings are noisy'). These are the team's own reading of Samsung's data, made before article fit existed, not Samsung labels. Rows not listed here were NOT verified as correct; Phase 0 only listed the pairings it judged wrong or marginal.",
+  "verdicts": {
+    "row_1": "wrong",
+    "row_8": "wrong",
+    "row_12": "wrong",
+    "row_20": "wrong",
+    "row_5": "marginal"
+  }
+}

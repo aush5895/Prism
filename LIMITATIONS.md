@@ -297,7 +297,7 @@ the intended one.
   too vague to action and omitted it. That is a defensible reading, but it is the model's
   judgement, not a rule the pipeline enforces.
 
-### 2.6 The supplied article is trusted, not checked
+### 2.6 The supplied article is checked by a model judgment, and the first check failed
 
 The engine builds its plan from the article supplied with the request (frozen decision
 2), and it does not detect when Samsung has paired a complaint with the wrong article.
@@ -310,8 +310,27 @@ scores row_1 at 0.311 and the other three at 0.315, 0.345 and 0.335: middle of t
 with five correctly paired rows scoring lower. No threshold separates them, and one
 mislabelled row among twenty cannot fit or validate one honestly. An earlier demo script
 described row_1 as the engine declining the article. That was wrong, and the demo beat
-built on it has been removed. What guided mode does offer here is a fast exit: a plan that
-does not help ends in an agent handoff carrying everything that was tried.
+built on it has been removed.
+
+**What was built instead (article fit, `pipeline/article_fit.py`).** Lexical similarity
+cannot see the mismatch, so the one extraction call now also lists each problem the
+customer described and whether the article addresses it, quoting a sentence as evidence.
+A "covered" claim is believed only when that sentence is found in the article. The
+graded response is unchanged; the verdict reaches the customer, guided mode and the
+agent handoff through `meta.article_fit`.
+
+What it does not prove, stated plainly:
+- **A found quote shows the sentence exists, not that it answers the problem.** A model
+  could quote a real but irrelevant sentence and claim coverage. Requiring word overlap
+  between problem and quote was considered and rejected: "the display is dim" is covered
+  by "adjust the brightness" with no shared word, so it would call good pairings bad.
+- **It is measured on 20 rows against 4 verdicts that are the team's own** (Phase 0 §4.3,
+  `evaluation/pairing_verdicts.json`). Rows Phase 0 did not list were never checked, so
+  `docs/metrics.md` §6.2 reports them as "not flagged", never as known negatives.
+- **It needs a provider that can judge.** The offline stub and the row_21 recording
+  (made before this field existed) report "unknown", which is shown as nothing.
+- **It changes the extraction prompt**, so live figures measured before it (cost, the
+  20-row plans) must be regenerated with it, and are, by `run_eval --provider gemini`.
 
 ### 2.7 Guided mode
 
