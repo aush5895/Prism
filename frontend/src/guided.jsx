@@ -220,6 +220,19 @@ function Handoff({ handoff, onRestart }) {
           </ul>
         </div>
       )}
+      {handoff.unverified_by_article?.length > 0 && (
+        <div className="g-list">
+          <div className="g-list-label">Coverage not verified</div>
+          <ul>
+            {handoff.unverified_by_article.map((t) => (
+              <li key={t}>
+                <span className="g-list-name">{t}</span>
+                <span className="g-chip skip">Quote not in the article</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {handoff.not_tried.length > 0 && (
         <div className="g-list">
           <div className="g-list-label">Not yet tried</div>
@@ -253,15 +266,19 @@ function Handoff({ handoff, onRestart }) {
 
 function FitNotice({ session, busy, onEscalate }) {
   const missing = session.not_covered || []
+  // An unknown fit states no verdict to the customer; its unverified claims reach the agent only.
+  const unsure = session.article_fit?.fit === 'unknown' ? [] : (session.unverified || [])
   const fit = session.article_fit?.fit
-  if (!missing.length || !['active', 'awaiting_confirmation'].includes(session.status)) return null
+  if ((!missing.length && !unsure.length) || !['active', 'awaiting_confirmation'].includes(session.status)) return null
   return (
     <section className={`card g-fit${fit === 'none' ? ' g-fit--none' : ''}`}>
-      <div className="eyebrow">{fit === 'none' ? 'This article may not fit' : 'Not in this article'}</div>
+      <div className="eyebrow">{fit === 'none' ? 'This article may not fit' : missing.length ? 'Not in this article' : 'Could not confirm'}</div>
       <p className="g-lede">
         {fit === 'none'
           ? 'The article supplied with your request does not seem to cover what you described, so these steps may not help.'
-          : `This guide cannot help with: ${missing.join('; ')}. It goes to the agent if you need one.`}
+          : missing.length
+            ? `This guide cannot help with: ${missing.join('; ')}. It goes to the agent if you need one.`
+            : `We could not confirm this guide covers: ${unsure.join('; ')}. The agent will see that if you need one.`}
       </p>
       {fit === 'none' && (
         <button type="button" className="g-btn" disabled={busy} onClick={onEscalate}>

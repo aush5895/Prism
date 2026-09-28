@@ -508,7 +508,7 @@ def test_an_article_that_covers_nothing_is_said_plainly_in_the_handoff():
            "issues": [{"issue": "screen flashes", "covered": False}]}
     store, session = _open(_plan_with_fit(fit))
     store.apply(session.session_id, "escalate")
-    assert "does not cover any problem" in session.view()["handoff"]["text"]
+    assert "judged not to cover any problem" in session.view()["handoff"]["text"]
 
 
 def test_an_unknown_fit_is_never_reported_as_a_gap():
@@ -517,3 +517,23 @@ def test_an_unknown_fit_is_never_reported_as_a_gap():
     view = session.view()
     assert view["not_covered"] == [] and view["handoff"]["not_covered_by_article"] == []
     assert "Article fit" not in view["handoff"]["text"]
+
+
+def test_an_unverified_claim_is_never_reported_as_not_covered():
+    """REGRESSION, found on review: a claim whose quote was not in the article was
+    listed to the customer and the agent as "not covered". It is unverified: the agent is
+    told coverage could not be checked, and the customer is not told it is missing."""
+    fit = {"fit": "partial", "covered": 1, "total": 2, "issues": [
+        {"issue": "touch is laggy", "status": "covered", "covered": True},
+        {"issue": "screen flashes", "status": "unverified", "covered": False,
+         "quote_found": False}]}
+    store, session = _open(_plan_with_fit(fit))
+    assert session.view()["not_covered"] == []
+    assert session.view()["unverified"] == ["screen flashes"]
+    store.apply(session.session_id, "escalate")
+    handoff = session.view()["handoff"]
+    assert handoff["not_covered_by_article"] == []
+    assert handoff["unverified_by_article"] == ["screen flashes"]
+    assert "Not covered by the article" not in handoff["text"]
+    assert "could not be verified for: screen flashes" in handoff["text"]
+

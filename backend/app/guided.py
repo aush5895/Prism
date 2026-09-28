@@ -326,6 +326,9 @@ class GuidedSession:
             # Problems the customer described that the article does not address. Guided
             # mode cannot walk these; they go to the agent in the handoff.
             "not_covered": fit_mod.uncovered(self.article_fit),
+            # Claimed covered, but the quoted sentence is not in the article. Neither a
+            # yes nor a no: shown as unverified, never as "not covered".
+            "unverified": fit_mod.unverified(self.article_fit),
         }
         if self.status in (ESCALATED, NO_PLAN):
             out["handoff"] = build_handoff(self)
@@ -404,12 +407,15 @@ def build_handoff(session: GuidedSession) -> Dict[str, Any]:
     if session.article_title:
         lines.append(f"Knowledge article: {_clean(session.article_title)}")
     not_covered = [_clean(i) for i in fit_mod.uncovered(session.article_fit)]
+    unverified = [_clean(i) for i in fit_mod.unverified(session.article_fit)]
     fit = (session.article_fit or {}).get("fit")
     if fit == fit_mod.NONE:
-        lines.append("Article fit: the article does not cover any problem the customer "
+        lines.append("Article fit: judged not to cover any problem the customer "
                      "described; its steps may not apply.")
     elif not_covered:
         lines.append(f"Not covered by the article: {'; '.join(not_covered)}")
+    if unverified:
+        lines.append(f"Article fit could not be verified for: {'; '.join(unverified)}")
     lines.append(f"Why handed off: {reason_label}")
     lines.append(headline)
     if tried:
@@ -429,6 +435,7 @@ def build_handoff(session: GuidedSession) -> Dict[str, Any]:
         "symptoms": [_clean(s) for s in session.symptoms],
         "article_title": _clean(session.article_title) or None,
         "not_covered_by_article": not_covered,
+        "unverified_by_article": unverified,
         "article_fit": fit,
         "tried": tried,
         "declined": declined,

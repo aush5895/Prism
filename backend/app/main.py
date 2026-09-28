@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, Literal
+from typing import Any, Dict, Literal, Optional
 
 from contextlib import asynccontextmanager
 
@@ -124,11 +124,17 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
                 _replay_grounding(debug_sink, lookup.plan, get_cache())
             meta.cache_hit = True
             meta.cost_usd = 0.0
-            # The fit was judged on the cold run, for the same article (a hit requires
-            # it) and a complaint close enough to share the plan. Marked as replayed.
+            # The stored fit judged the COLD run's complaint. It is replayed only when this
+            # request is those same words (a refresh, or guided mode starting from the
+            # plan just shown). Otherwise it judged another customer: sharing a plan does
+            # not mean sharing problems ("screen flickers" and "screen flickers and the
+            # battery drains" can land on one plan), and no model read this complaint, so
+            # no verdict: unknown. The debug view still shows the cold run's fit, labelled.
             cached_fit = (lookup.plan.grounding or {}).get("article_fit")
-            if cached_fit:
+            if cached_fit and _same_words(req.query, lookup.plan.source_query):
                 meta.article_fit = {**cached_fit, "from_cache": True}
+            else:
+                meta.article_fit = article_fit.unknown("cache_hit")
             meta.model = lookup.plan.model or meta.model
             return _finish(req, list(lookup.plan.query_variations), lookup.plan.response,
                            meta, timer)
@@ -148,6 +154,13 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
 
     with timer.stage("article_fit"):
         fit = article_fit.assess(extraction, evidence.text)
+        try:
+            # The fit carries article text to the customer, outside `response`, so it gets
+            # the same zero-URL check. _find already refuses a URL; this fails closed.
+            validate.assert_no_urls(fit)
+        except validate.ValidationError as exc:
+            log.error("article fit carried a URL; reported as unknown: %s", exc)
+            fit = article_fit.unknown("url_in_evidence")
     meta.article_fit = fit
 
     with timer.stage("resolve_and_order"):
@@ -220,6 +233,12 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
     return _finish(req, variations, response, meta, timer)
 
 
+def _same_words(a: Optional[str], b: Optional[str]) -> bool:
+    """The same complaint text, ignoring case and whitespace only."""
+    squash = lambda t: " ".join((t or "").lower().split())  # noqa: E731
+    return bool(a and b) and squash(a) == squash(b)
+
+
 def _replay_grounding(debug_sink: Dict[str, Any], plan, cache) -> None:
     """On a cache hit, show how the plan was grounded when it was built.
 
@@ -238,6 +257,7 @@ def _replay_grounding(debug_sink: Dict[str, Any], plan, cache) -> None:
     debug_sink["resolutions"] = grounding["resolutions"]
     debug_sink["score_terms"] = grounding["score_terms"]
     debug_sink["spans"] = grounding["spans"]
+    # The cold run's fit, for the cold run's complaint: debug only, never the customer's.
     debug_sink["article_fit"] = grounding.get("article_fit")
     debug_sink["grounding_from"] = {"cold_run_query": plan.source_query,
                                     "stored_at": plan.stored_at}

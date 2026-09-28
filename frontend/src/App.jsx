@@ -398,7 +398,11 @@ export default function App() {
               </p>
             </section>
           )}
-          <ArticleFitPanel fit={result.envelope.meta.article_fit} />
+          <ArticleFitPanel
+            fit={result.envelope.meta.article_fit}
+            coldFit={result.envelope.meta.cache_hit ? result.debug.article_fit : null}
+            coldQuery={result.debug.grounding_from?.cold_run_query}
+          />
           <PlanPanel response={result.envelope.response} />
           <ResolverPanel
             resolutions={result.debug.resolutions}

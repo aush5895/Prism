@@ -631,6 +631,7 @@ body[data-view="customer"] { background: var(--c-bg); color: var(--c-text); }
 }
 .fit-list li.yes .fit-mark { background: #e7f5ee; color: var(--c-green-dark); }
 .fit-list li.no .fit-mark { background: #fdecea; color: var(--c-crit); }
+.fit-list li.unk .fit-mark { background: #eef0f3; color: var(--c-dim); }
 .fit-note { margin: 10px 0 0; color: var(--c-dim); font-size: 14px; }
 
 .g-fit { padding: 18px 24px; margin-bottom: 14px; border-color: #f1d9a8; background: #fffaf0; }

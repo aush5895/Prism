@@ -267,30 +267,52 @@ export function OpenButton({ deeplink, validation, catalogId, open, onToggle }) 
 // Does the supplied article cover what the customer described? Judged by the one
 // extraction call and believed only where its quoted sentence is found in the article
 // (pipeline/article_fit.py). "unknown" renders nothing: no verdict is not a verdict.
+// One problem's state. `status` is the backend's; the fallback reads reports written
+// before it existed. A claim whose quote was not found is "unverified": the model may be
+// right and have misquoted, so it is never shown as "not covered".
+export function fitStatus(issue) {
+  if (issue.status) return issue.status
+  if (issue.covered) return 'covered'
+  return issue.quote_found === false ? 'unverified' : 'not_covered'
+}
+
+const FIT_MARKS = {
+  covered: { label: 'Covered', cls: 'yes', tip: (i) => `From the article: ${i.evidence}` },
+  not_covered: { label: 'Not covered', cls: 'no', tip: () => 'The article gives no steps for this' },
+  unverified: {
+    label: 'Unverified', cls: 'unk',
+    tip: () => 'Said to be covered, but the quoted sentence is not in the article',
+  },
+}
+
 export function FitBanner({ fit, onAgent }) {
   if (!fit || !fit.total || fit.fit === 'unknown') return null
   const lead = fit.fit === 'full'
     ? 'The article covers everything you described.'
     : fit.fit === 'none'
       ? 'This article does not seem to cover what you described.'
-      : `This article covers ${fit.covered} of the ${fit.total} problems you described.`
+      : fit.covered > 0
+        ? `This article covers ${fit.covered} of the ${fit.total} problems you described.`
+        : 'We could not confirm that this article covers what you described.'
   return (
     <section className={`fit fit--${fit.fit}`} aria-live="polite">
       <div className="fit-lead">{lead}</div>
       <ul className="fit-list">
-        {fit.issues.map((i) => (
-          <li key={i.issue} className={i.covered ? 'yes' : 'no'}
-              title={i.covered ? `From the article: ${i.evidence}` : 'The article gives no steps for this'}>
-            <span className="fit-mark">{i.covered ? 'Covered' : 'Not covered'}</span>
-            {i.issue}
-          </li>
-        ))}
+        {fit.issues.map((i) => {
+          const mark = FIT_MARKS[fitStatus(i)] || FIT_MARKS.unverified
+          return (
+            <li key={i.issue} className={mark.cls} title={mark.tip(i)}>
+              <span className="fit-mark">{mark.label}</span>
+              {i.issue}
+            </li>
+          )
+        })}
       </ul>
       {fit.fit !== 'full' && (
         <p className="fit-note">
           {fit.fit === 'none'
             ? 'The steps below come from the article supplied with your request and may not help.'
-            : 'The steps below address what the article covers. An agent can take the rest.'}
+            : 'The steps below come from the article supplied with your request. An agent can take anything they do not cover.'}
           {onAgent && (
             <>
               {' '}

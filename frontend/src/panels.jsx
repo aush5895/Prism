@@ -1,6 +1,8 @@
 // The five panels. Every value rendered here is read verbatim from the API response —
 // no scoring, ordering, resolving or span arithmetic happens in the browser.
 
+import { fitStatus } from './customer.jsx'
+
 const nf = (n, d = 1) => (n === null || n === undefined ? '—' : Number(n).toFixed(d))
 
 // ----------------------------------------------------------------- 1. enrichment
@@ -286,38 +288,60 @@ export function TelemetryPanel({ meta, cache, lastColdMs }) {
 
 // Does the article fit the complaint? The model's claim beside whether its quoted
 // sentence was found in the article; only the second makes an issue "covered".
-export function ArticleFitPanel({ fit }) {
+const FIT_STATUS_WORDS = { covered: 'covered', not_covered: 'not covered', unverified: 'UNVERIFIED' }
+
+function FitTable({ fit }) {
+  return (
+    <table className="verdict-table">
+      <thead>
+        <tr><th>Problem described</th><th>Model says</th><th>Quote in article</th><th>Verdict</th><th>Evidence</th></tr>
+      </thead>
+      <tbody>
+        {fit.issues.map((i) => {
+          const status = fitStatus(i)
+          return (
+            <tr key={i.issue} className={status === 'covered' ? 'accepted' : 'rejected'}>
+              <td>{i.issue}</td>
+              <td>{i.claimed_covered ? 'covered' : 'not covered'}</td>
+              <td>{i.quote_found === null ? '-' : i.quote_found ? `whole sentence (${i.match})` : 'NOT found'}</td>
+              <td>{FIT_STATUS_WORDS[status]}</td>
+              <td>{i.evidence || <em>-</em>}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
+export function ArticleFitPanel({ fit, coldFit = null, coldQuery = null }) {
+  const known = fit && fit.fit !== 'unknown'
+  const fromCache = fit?.reason === 'cache_hit'
   return (
     <section className="panel wide">
       <h2>
         <span className="n">6</span> Does the article fit the complaint?
         <span className="note">
-          {fit && fit.fit !== 'unknown'
-            ? `${fit.covered}/${fit.total} covered · ${fit.fit}${fit.from_cache ? ' · from the cold run' : ''}`
+          {known
+            ? `${fit.covered}/${fit.total} covered · ${fit.fit}${fit.unverified_claims ? ` · ${fit.unverified_claims} unverified` : ''}${fit.from_cache ? ' · replayed, same words' : ''}`
             : 'unknown'}
         </span>
       </h2>
-      {!fit || fit.fit === 'unknown' ? (
+      {known ? <FitTable fit={fit} /> : (
         <p className="empty">
-          The extraction provider reported no problems to check (the offline parser and older
-          recordings cannot judge coverage), so no verdict is shown anywhere.
+          {fromCache
+            ? 'Cache hit: no model read this complaint, so no fit verdict is shown to the customer. The plan is shared; the complaint may not be.'
+            : 'No verdict. The provider reported no problems to check (the offline parser and older recordings cannot judge coverage), or every claim failed verification.'}
         </p>
-      ) : (
-        <table className="verdict-table">
-          <thead>
-            <tr><th>Problem described</th><th>Model says</th><th>Quote in article</th><th>Evidence</th></tr>
-          </thead>
-          <tbody>
-            {fit.issues.map((i) => (
-              <tr key={i.issue} className={i.covered ? 'accepted' : 'rejected'}>
-                <td>{i.issue}</td>
-                <td>{i.claimed_covered ? 'covered' : 'not covered'}</td>
-                <td>{i.quote_found === null ? '-' : i.quote_found ? `found (${i.match})` : 'NOT found'}</td>
-                <td>{i.evidence || <em>-</em>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      )}
+      {fromCache && coldFit && coldFit.fit !== 'unknown' && (
+        <>
+          <p className="empty">
+            For reference only, the fit judged on the cold run
+            {coldQuery ? <> for &ldquo;{coldQuery}&rdquo;</> : null}:
+          </p>
+          <FitTable fit={coldFit} />
+        </>
       )}
     </section>
   )

@@ -113,6 +113,7 @@ class GeminiProvider(LLMProvider):
         self._record_usage(resp)
         payload = self._parse(resp.text)
         _repair_spans(payload)
+        _tolerate_complaint_issues(payload)
         return Extraction(**payload)
 
     @staticmethod
@@ -139,3 +140,24 @@ class GeminiProvider(LLMProvider):
 
     def last_usage(self) -> Dict[str, float]:
         return dict(self._usage)
+
+
+def _tolerate_complaint_issues(payload: Dict[str, Any]) -> None:
+    """complaint_issues feeds article fit only, which is not graded. A malformed list must
+    degrade the fit to "unknown", never fail the request: without this, one bad item
+    (a missing field, `covered: "yes"`) raised in Extraction(**payload) and the customer
+    got a fallback instead of a plan the rest of the payload fully supported."""
+    raw = payload.get("complaint_issues")
+    kept = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict) or not isinstance(item.get("issue"), str):
+            continue
+        covered = item.get("covered")
+        evidence = item.get("evidence")
+        kept.append({
+            "issue": item["issue"],
+            # Only a real boolean true counts as a claim; "yes", 1 or null do not.
+            "covered": covered is True,
+            "evidence": evidence if isinstance(evidence, str) else "",
+        })
+    payload["complaint_issues"] = kept

@@ -41,7 +41,7 @@ from app.llm import get_provider  # noqa: E402
 from app.llm.base import LLMProvider  # noqa: E402
 from app.llm.replay import ReplayProvider  # noqa: E402
 from app.main import run_pipeline  # noqa: E402
-from app.pipeline import validate  # noqa: E402
+from app.pipeline import article_fit, validate  # noqa: E402
 from app.pipeline.cache import (SemanticCache, evidence_key, get_cache,  # noqa: E402
                                 reset_cache)
 from app.pipeline.embeddings import get_embedder  # noqa: E402
@@ -759,8 +759,9 @@ def _fit_summary(fit: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         return {"fit": None, "covered": 0, "total": 0, "unverified_claims": 0, "issues": []}
     return {"fit": fit["fit"], "covered": fit["covered"], "total": fit["total"],
             "unverified_claims": fit.get("unverified_claims", 0),
-            "issues": [{"issue": i["issue"], "covered": i["covered"],
-                        "quote_found": i["quote_found"]} for i in fit.get("issues", [])]}
+            "issues": [{"issue": i["issue"], "status": article_fit.status_of(i),
+                        "covered": i["covered"], "quote_found": i["quote_found"]}
+                       for i in fit.get("issues", [])]}
 
 
 # ----------------------------------------------------------------- article fit
@@ -782,7 +783,7 @@ def run_article_fit_eval(per_row: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         rows.append({"id": r["id"], "phase0": verdicts.get(r["id"], "not flagged"),
                      "fit": f.get("fit") or "no extraction", "covered": f.get("covered", 0),
                      "total": f.get("total", 0), "unverified": f.get("unverified_claims", 0),
-                     "uncovered": [i["issue"] for i in f.get("issues", []) if not i["covered"]]})
+                     "uncovered": article_fit.uncovered(f)})
     judged = [r for r in rows if r["fit"] in ("full", "partial", "none")]
     wrong = [r for r in judged if r["phase0"] == "wrong"]
     unflagged = [r for r in judged if r["phase0"] == "not flagged"]

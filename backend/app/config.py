@@ -140,9 +140,6 @@ GUIDED_MAX_WARNINGS = 2
 
 # ---- article fit (non-graded): does the supplied article cover what the customer said?
 ARTICLE_FIT_MAX_ISSUES = 4
-# A "covered" claim is believed only if its quoted evidence is found in the article:
-# verbatim, or failing that, a located span supporting at least this share of the quote's
-# subject words (the same measure pipeline/spans.py uses to ground steps).
-ARTICLE_FIT_MIN_SUPPORT = 0.8
-# A gate quote must be a whole sentence of at least this length; see guided._is_whole_sentence.
+# A gate quote, and an article-fit evidence quote, must be a whole sentence of at least
+# this length; see guided._is_whole_sentence and article_fit._find.
 GUIDED_MIN_QUOTE_CHARS = 20

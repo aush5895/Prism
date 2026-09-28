@@ -36,8 +36,8 @@ is laggy."* Samsung's knowledge article for touchscreen issues arrives with the 
    agent receives exactly what was tried and what is left.
 5. **The engine checks the article fits the complaint.** The same LLM call lists each
    problem the customer described and whether the article addresses it, quoting the
-   sentence that does. A "covered" claim counts only if that sentence is really in the
-   article. The customer sees "This article covers 1 of the 2 problems you described";
+   sentence that does. A "covered" claim counts only if that quote is a whole sentence
+   of the article. The customer sees "This article covers 1 of the 2 problems you described";
    what it does not cover goes to the agent.
 6. **A reworded complaint about the same article** is answered from a semantic cache in
    milliseconds with no LLM call.
@@ -84,7 +84,7 @@ Needs Python 3.11+ and Node 18+.
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python -m pytest                                              # 241 passed, 2 skipped
+python -m pytest                                              # 251 passed, 2 skipped
 python -m uvicorn app.main:app --app-dir backend --port 8000
 ```
 
@@ -92,7 +92,7 @@ python -m uvicorn app.main:app --app-dir backend --port 8000
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python -m pytest                                              # 241 passed, 2 skipped
+python -m pytest                                              # 251 passed, 2 skipped
 python -m uvicorn app.main:app --app-dir backend --port 8000
 ```
 
@@ -224,15 +224,23 @@ faithfully grounded and useless, and a lexical similarity signal could not detec
 So the one extraction call also lists each problem the customer described (up to four)
 and whether the article addresses it, with one sentence copied from the article as
 evidence. The model is still a parser here, not an authority: `pipeline/article_fit.py`
-believes a "covered" claim only when that sentence is found in the article, and records
-a claim it cannot find as unverified and not covered.
+believes a "covered" claim only when its quote is a whole sentence of the article
+(verbatim, or after collapsing whitespace, curly quotes, dashes and case). A fragment, a
+single word, an invented sentence or one carrying a URL is refused. A refused claim is
+**unverified**, which is neither covered nor not covered: the model may be right and have
+misquoted, so the customer is never told "not covered" on its strength.
 
 | Fit | Meaning | What the customer sees |
 |---|---|---|
 | full | every described problem covered, with a verified quote | a short confirmation |
-| partial | some are, some are not | which problems are not covered; guided mode passes them to the agent |
-| none | none are | "this article does not seem to cover what you described", with an agent offered first |
-| unknown | the provider reported nothing (offline stub, older recordings) | nothing: no verdict is not a verdict |
+| partial | a mix of covered, not covered and unverified | each problem marked; guided mode passes the uncovered ones to the agent |
+| none | the model judged every problem not covered | "this article does not seem to cover what you described", with an agent offered first |
+| unknown | no problems reported (offline stub, older recordings), every claim unverified, or a cache hit on reworded words | nothing: no verdict is not a verdict |
+
+A cache hit from a reworded complaint reports **unknown**: the plan is shared, but the
+stored fit judged another customer's words, and no model read this one's. Only the same
+words (a refresh, or guided mode starting from the plan just shown) get the stored fit
+back, marked as replayed. The debug view shows the cold run's fit, labelled as such.
 
 It lives in `meta.article_fit`; the graded `response` is unchanged, and a test asserts it
 is identical with and without the fit. `docs/metrics.md` §6.2 compares the verdicts with
@@ -303,7 +311,7 @@ backend/app/
                           catalog_audit · article_fit · ordering · spans · assemble ·
                           validate
   llm/                    base · stub (offline) · replay · gemini
-backend/tests/            241 tests; fixtures/ holds a recorded Gemini extraction
+backend/tests/            251 tests; fixtures/ holds a recorded Gemini extraction
 evaluation/               synthetic.py (gold set) · run_eval.py · scale.py · report.json
 frontend/                 React + Vite: customer view, guided mode, engineer view
 tools/                    catalog_health · demo_row21 · record_fixture_row21
@@ -326,7 +334,7 @@ cross-encoder or agent framework: each was evaluated and rejected with a reason 
 The main ones, each with its evidence in [`LIMITATIONS.md`](LIMITATIONS.md):
 
 - **Article fit is a model judgment with a verified quote, not proof.** The check
-  confirms the quoted sentence is in the article, not that it truly addresses the
+  confirms the quote is a whole sentence of the article, not that it truly addresses the
   problem. It is measured against 4 mismatched pairings in 20 rows: a small sample, with
   verdicts that are the team's own.
 - **10 wrong answers remain on the gold set**, mostly a short catalog subject matching

@@ -315,12 +315,17 @@ built on it has been removed.
 **What was built instead (article fit, `pipeline/article_fit.py`).** Lexical similarity
 cannot see the mismatch, so the one extraction call now also lists each problem the
 customer described and whether the article addresses it, quoting a sentence as evidence.
-A "covered" claim is believed only when that sentence is found in the article. The
-graded response is unchanged; the verdict reaches the customer, guided mode and the
+A "covered" claim is believed only when its quote is a whole sentence of the article
+(verbatim, or after collapsing whitespace, quotes, dashes and case); anything else is
+"unverified", never "not covered". A cache hit from reworded words reports "unknown",
+because the stored fit judged another customer's complaint. The graded response is unchanged; the verdict reaches the customer, guided mode and the
 agent handoff through `meta.article_fit`.
 
 What it does not prove, stated plainly:
-- **A found quote shows the sentence exists, not that it answers the problem.** A model
+- **A found quote shows the sentence exists, not that it answers the problem.** An
+  earlier version also accepted a quote located by word overlap; review showed an
+  opposite-meaning sentence sharing the same words passed, so only whole-sentence matches
+  count now, at the cost of refusing a real quote the model paraphrased. A model
   could quote a real but irrelevant sentence and claim coverage. Requiring word overlap
   between problem and quote was considered and rejected: "the display is dim" is covered
   by "adjust the brightness" with no shared word, so it would call good pairings bad.

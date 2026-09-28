@@ -46,10 +46,14 @@ def test_a_covered_claim_with_an_invented_quote_is_not_believed():
     fit = article_fit.assess(_extraction(
         {"issue": "screen flashes when charging", "covered": True,
          "evidence": "Replace the charging port to stop the screen flashing."}), ARTICLE)
-    assert fit["fit"] == "none" and fit["covered"] == 0
-    assert fit["issues"][0]["quote_found"] is False
-    assert fit["unverified_claims"] == 1
+    assert fit["covered"] == 0 and fit["issues"][0]["quote_found"] is False
+    assert fit["issues"][0]["status"] == "unverified" and fit["unverified_claims"] == 1
     assert fit["issues"][0]["evidence"] == "", "an unverified quote is never shown"
+    # REGRESSION, found on review: this used to be fit "none" and listed as "not covered".
+    # A misquote is not evidence the article misses the problem.
+    assert fit["fit"] == "unknown"
+    assert article_fit.uncovered(fit) == []
+    assert article_fit.unverified(fit) == ["screen flashes when charging"]
 
 
 def test_a_reformatted_quote_is_still_found():
@@ -58,7 +62,7 @@ def test_a_reformatted_quote_is_still_found():
          "evidence": "Tap  Settings, then Display, then Touch sensitivity to enable it"}),
         ARTICLE)
     assert fit["issues"][0]["covered"] is True
-    assert fit["issues"][0]["match"] in ("verbatim", "located")
+    assert fit["issues"][0]["match"] == "normalised"
 
 
 def test_no_reported_problems_is_unknown_not_covered():
@@ -129,16 +133,31 @@ def test_the_graded_response_is_identical_with_or_without_the_fit(row21_request,
     assert plain.meta.article_fit["fit"] == "unknown", "an older recording judges nothing"
 
 
-def test_a_cache_hit_carries_the_fit_from_the_cold_run(row21_request, row21_sentence):
+def test_a_cache_hit_never_gives_one_customer_another_customers_fit(row21_request,
+                                                                   row21_sentence):
+    """REGRESSION, found on review: a hit replayed the cold run's fit as this customer's.
+    Two complaints can share a plan and not their problems, and no model read the new
+    one, so a reworded complaint gets no verdict. The same words (a refresh, or guided
+    mode starting from the plan just shown) get the cold run's fit, marked as replayed.
+    The debug view keeps the cold run's fit either way, for reference."""
     provider = _ReplayWithIssues([{"issue": "touch is laggy", "covered": True,
                                    "evidence": row21_sentence}])
     cold = run_pipeline(row21_request, provider=provider, use_cache=True)
-    warm, debug = None, {}
-    warm = run_pipeline(row21_request, provider=provider, debug_sink=debug, use_cache=True)
-    assert warm.meta.cache_hit is True
-    assert warm.meta.article_fit["fit"] == cold.meta.article_fit["fit"] == "full"
-    assert warm.meta.article_fit["from_cache"] is True
+    assert cold.meta.article_fit["fit"] == "full"
+
+    same = run_pipeline(row21_request, provider=provider, use_cache=True)
+    assert same.meta.cache_hit is True
+    assert same.meta.article_fit["fit"] == "full" and same.meta.article_fit["from_cache"]
+
+    reworded = TroubleshootRequest(query="Please help: " + row21_request.query,
+                                   siis_response=row21_request.siis_response)
+    debug = {}
+    other = run_pipeline(reworded, provider=provider, debug_sink=debug, use_cache=True)
+    assert other.meta.cache_hit is True
+    assert other.meta.article_fit["fit"] == "unknown"
+    assert other.meta.article_fit["reason"] == "cache_hit"
     assert debug["article_fit"]["fit"] == "full"
+    assert debug["grounding_from"]["cold_run_query"] == row21_request.query
 
 
 def test_the_prompt_asks_for_coverage_with_quoted_evidence():
@@ -147,6 +166,71 @@ def test_the_prompt_asks_for_coverage_with_quoted_evidence():
     item = EXTRACTION_JSON_SCHEMA["properties"]["complaint_issues"]["items"]
     assert set(item["required"]) == {"issue", "covered", "evidence"}
     assert "character for character" in SYSTEM_PROMPT
+    # REGRESSION, found on review: the block sat between two STRUCTURE bullets, splitting
+    # query_variations off from the fields it belongs with.
+    assert SYSTEM_PROMPT.index("- query_variations:") < SYSTEM_PROMPT.index("COMPLAINT COVERAGE")
+
+
+# ----------------------------------------------------------------- what counts as a quote
+@pytest.mark.parametrize("quote", [".", "the", "Settings", "Touch sensitivity",
+                                   "then Display, then Touch sensitivity to enable it."])
+def test_a_fragment_is_not_evidence(quote):
+    """REGRESSION, found on review: '.', 'the' and 'Settings' passed as verbatim quotes,
+    since each occurs in the article. Evidence must be a whole sentence."""
+    fit = article_fit.assess(_extraction(
+        {"issue": "touch is laggy", "covered": True, "evidence": quote}), ARTICLE)
+    assert fit["issues"][0]["status"] == "unverified"
+
+
+def test_an_opposite_sentence_with_the_same_words_is_not_evidence():
+    """REGRESSION, found on review: the located path accepted word overlap, so a sentence
+    saying the opposite of the article's passed as a quote from it."""
+    fit = article_fit.assess(_extraction(
+        {"issue": "touch is laggy", "covered": True,
+         "evidence": "Tap Settings, then Display, then Touch sensitivity to disable it."}),
+        ARTICLE)
+    assert fit["issues"][0]["status"] == "unverified"
+
+
+def test_a_quote_carrying_a_url_is_refused_and_never_reaches_the_response():
+    """REGRESSION, found on review: evidence was sliced from the article as-is, so a
+    sentence with a link went out in meta.article_fit, breaking the zero-URL rule."""
+    article = ("Touch problems. Visit https://www.samsung.com/support for touch help. "
+               "Tap Settings, then Display, then Touch sensitivity to enable it.")
+    fit = article_fit.assess(_extraction(
+        {"issue": "touch is laggy", "covered": True,
+         "evidence": "Visit https://www.samsung.com/support for touch help."}), article)
+    assert fit["issues"][0]["status"] == "unverified"
+    assert "http" not in json.dumps(fit) and "www." not in json.dumps(fit)
+
+
+def test_curly_quotes_case_and_a_missing_full_stop_are_tolerated():
+    article = "Battery drain. Don\u2019t leave Bluetooth on when you aren\u2019t using it."
+    fit = article_fit.assess(_extraction(
+        {"issue": "battery drains", "covered": True,
+         "evidence": "don't leave bluetooth on when you aren't using it"}), article)
+    issue = fit["issues"][0]
+    assert issue["status"] == "covered"
+    assert issue["evidence"] == article[issue["span"][0]:issue["span"][1]]
+    assert issue["evidence"].endswith("it."), "the article's own sentence is shown"
+
+
+def test_the_gemini_parser_degrades_a_malformed_issue_list_instead_of_failing():
+    """complaint_issues is not graded; a bad item must cost the fit, not the plan."""
+    from app.llm.gemini import _tolerate_complaint_issues
+    payload = {"complaint_issues": [
+        {"issue": "touch is laggy", "covered": "yes", "evidence": None},
+        {"covered": True, "evidence": "x"}, "not a dict",
+        {"issue": "screen flashes", "covered": True, "evidence": "Some sentence here."}]}
+    _tolerate_complaint_issues(payload)
+    assert payload["complaint_issues"] == [
+        {"issue": "touch is laggy", "covered": False, "evidence": ""},
+        {"issue": "screen flashes", "covered": True, "evidence": "Some sentence here."}]
+    for bad in (None, "text", {"a": 1}):
+        payload = {"complaint_issues": bad}
+        _tolerate_complaint_issues(payload)
+        assert payload["complaint_issues"] == []
+    Extraction(goal_topic="Touch", title="Touch issues", **payload)
 
 
 # ----------------------------------------------------------------- evaluation

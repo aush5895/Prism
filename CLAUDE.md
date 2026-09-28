@@ -96,7 +96,7 @@ contract is wrong, say so and stop; do not act on it unilaterally.
 
 **Done:** Phase 0 · D1 backend · D2 evaluation harness and gate ablation · D3a live
 Gemini · D3b semantic cache · D4a demo UI · scale run · guided mode · grounding on cache
-hits · catalog audit and health report · article fit. **241 passed, 2 skipped** (the two run once
+hits · catalog audit and health report · article fit. **251 passed, 2 skipped** (the two run once
 `python -m evaluation.scale` has written a report). D3c and D4b were cut; see
 `LIMITATIONS.md` §1.
 
@@ -127,8 +127,9 @@ provider: read it from `docs/metrics.md`, never from memory. Figures quoted befo
    the mismatch through article fit, if the live model judges it so; quote that result
    from `docs/metrics.md` §6.2, never from expectation.
 6. **Article fit never changes the graded response** and lives only in `meta.article_fit`.
-   A "covered" verdict requires the quoted sentence to be found in the article; "unknown"
-   is never shown as a verdict. Do not add a refusal (emptying the plan) on a "none" fit
+   A "covered" verdict requires the quote to be a whole sentence of the article; a claim
+   that fails that is "unverified", never "not covered"; a cache hit from different words reports
+   "unknown" (the stored fit judged another customer's); "unknown" is never shown as a verdict. Do not add a refusal (emptying the plan) on a "none" fit
    without measuring it: 20 rows cannot validate that.
 
 **Before submission, in this order:**
@@ -136,7 +137,7 @@ provider: read it from `docs/metrics.md`, never from memory. Figures quoted befo
 2. `python -m evaluation.scale --max 10000` (MiniLM; minutes, not hours, since the
    eviction fix)
 3. `python -m tools.catalog_health --provider gemini --rate-limit-rpm 12`
-4. `python -m pytest` must be 243 passed, 0 skipped once the scale report exists
+4. `python -m pytest` must be 253 passed, 0 skipped once the scale report exists
 5. Copy every live-provider figure used in the deck or video from `docs/metrics.md`.
 
 **Next lead, not actioned.** Most of the 10 remaining wrong answers share one shape: a
@@ -153,7 +154,7 @@ server-enforced safety gate, a reproducible README.
 ## 6. Commands
 
 ```bash
-python -m pytest                  # 241 passed, 2 skipped; no API key needed
+python -m pytest                  # 251 passed, 2 skipped; no API key needed
 python -m evaluation.run_eval     # regenerate report.json + metrics.md (offline stub)
 python -m evaluation.run_eval --provider gemini --rate-limit-rpm 12   # live numbers
 python -m evaluation.scale --max 10000                                 # metrics.md §8
