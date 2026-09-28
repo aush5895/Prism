@@ -1,0 +1,481 @@
+{
+  "generated_at_utc": "2026-09-28T13:35:08Z",
+  "catalog": {
+    "n_entries": 577,
+    "n_unique_uris": 577,
+    "type_counts": {
+      "onClickURL": 254,
+      "offURL": 138,
+      "onURL": 138,
+      "updateURL": 36,
+      "none": 11
+    },
+    "shared_label_groups": 54,
+    "shared_label_entries": 193,
+    "largest_shared_labels": [
+      {
+        "message": "View Notification Settings",
+        "type": "onClickURL",
+        "n": 21
+      },
+      {
+        "message": "View Sound Settings",
+        "type": "onClickURL",
+        "n": 16
+      },
+      {
+        "message": "View Magnification Settings",
+        "type": "onClickURL",
+        "n": 13
+      },
+      {
+        "message": "Check Battery Performance",
+        "type": "onClickURL",
+        "n": 9
+      },
+      {
+        "message": "View Timeout Settings",
+        "type": "onClickURL",
+        "n": 7
+      },
+      {
+        "message": "Enable Adaptive Display",
+        "type": "onURL",
+        "n": 6
+      },
+      {
+        "message": "View Device Details",
+        "type": "onClickURL",
+        "n": 6
+      },
+      {
+        "message": "View WiFi Settings",
+        "type": "onClickURL",
+        "n": 6
+      }
+    ],
+    "identical_text_groups": [
+      [
+        "DL-0035",
+        "DL-0222"
+      ],
+      [
+        "DL-0036",
+        "DL-0223"
+      ],
+      [
+        "DL-0158",
+        "DL-0422"
+      ],
+      [
+        "DL-0159",
+        "DL-0423"
+      ],
+      [
+        "DL-0518",
+        "DL-0552"
+      ]
+    ],
+    "toggle_subjects_on": 111,
+    "toggle_subjects_off": 112,
+    "toggle_subjects_both": 111,
+    "on_without_off": [],
+    "off_without_on": [
+      "charging feedback"
+    ],
+    "missing_type": [
+      "DL-0294",
+      "DL-0295",
+      "DL-0468",
+      "DL-0469",
+      "DL-0470",
+      "DL-0471",
+      "DL-0472",
+      "DL-0473",
+      "DL-0474",
+      "DL-0475",
+      "DL-0476"
+    ],
+    "missing_validation": [
+      "DL-0470",
+      "DL-0471",
+      "DL-0472",
+      "DL-0474",
+      "DL-0475",
+      "DL-0476",
+      "DL-0538"
+    ],
+    "label_unsupported": [
+      {
+        "id": "DL-0004",
+        "message": "View Click Options",
+        "type": "onClickURL",
+        "description": "Opens the left click as default action settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0017",
+        "message": "Disable Gesture Controls",
+        "type": "offURL",
+        "description": "Disables corner actions via device Settings on the device."
+      },
+      {
+        "id": "DL-0018",
+        "message": "Enable Gesture Controls",
+        "type": "onURL",
+        "description": "Enables corner actions via device Settings on the device."
+      },
+      {
+        "id": "DL-0038",
+        "message": "View Security Settings",
+        "type": "onClickURL",
+        "description": "Opens the blocking USB connections while locked settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0079",
+        "message": "Disable Turn on now",
+        "type": "offURL",
+        "description": "Disables Data Saver via device Settings on the device."
+      },
+      {
+        "id": "DL-0080",
+        "message": "Enable Turn on now",
+        "type": "onURL",
+        "description": "Enables Data Saver via device Settings on the device."
+      },
+      {
+        "id": "DL-0104",
+        "message": "Disable Adaptive Display",
+        "type": "offURL",
+        "description": "Disables extra brightness via device Settings on the device."
+      },
+      {
+        "id": "DL-0105",
+        "message": "Enable Adaptive Display",
+        "type": "onURL",
+        "description": "Enables extra brightness via device Settings on the device."
+      },
+      {
+        "id": "DL-0107",
+        "message": "View Ads",
+        "type": "onClickURL",
+        "description": "Opens the advertisement notifications filter settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0116",
+        "message": "View More options",
+        "type": "onClickURL",
+        "description": "Opens the gesture settings settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0117",
+        "message": "View Timeout Settings",
+        "type": "onClickURL",
+        "description": "Opens the guest mode settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0132",
+        "message": "View Device Details",
+        "type": "onClickURL",
+        "description": "Opens the offline device lock settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0150",
+        "message": "View Timeout Settings",
+        "type": "onClickURL",
+        "description": "Opens the time zone based on location settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0162",
+        "message": "Disable Grayscale",
+        "type": "offURL",
+        "description": "Disables mono audio via device Settings on the device."
+      },
+      {
+        "id": "DL-0163",
+        "message": "Enable Grayscale",
+        "type": "onURL",
+        "description": "Enables mono audio via device Settings on the device."
+      },
+      {
+        "id": "DL-0172",
+        "message": "View Device Details",
+        "type": "onClickURL",
+        "description": "Opens the nearby device scanning settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0252",
+        "message": "View Magnification Settings",
+        "type": "onClickURL",
+        "description": "Opens the on-screen keyboard settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0257",
+        "message": "View Timeout Settings",
+        "type": "onClickURL",
+        "description": "Opens the real-time traffic prioritization settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0260",
+        "message": "Adjust Volume",
+        "type": "updateURL",
+        "description": "Updates the sound mode to a specified value via device Settings on the device."
+      },
+      {
+        "id": "DL-0294",
+        "message": "Offurl",
+        "type": null,
+        "description": "Configures main screen navigation on cover screen on the device via device Settings."
+      },
+      {
+        "id": "DL-0295",
+        "message": "Onurl",
+        "type": null,
+        "description": "Configures main screen navigation on cover screen on the device via device Settings."
+      },
+      {
+        "id": "DL-0311",
+        "message": "Disable WiFi",
+        "type": "offURL",
+        "description": "Disables Mobile Hotspot via device Settings on the device."
+      },
+      {
+        "id": "DL-0312",
+        "message": "Enable WiFi",
+        "type": "onURL",
+        "description": "Enables Mobile Hotspot via device Settings on the device."
+      },
+      {
+        "id": "DL-0336",
+        "message": "View Magnification Settings",
+        "type": "onClickURL",
+        "description": "Opens the TalkBack on-screen keyboard echo settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0337",
+        "message": "View Magnification Settings",
+        "type": "onClickURL",
+        "description": "Opens the TalkBack physical keyboard echo settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0347",
+        "message": "View Sound Settings",
+        "type": "onClickURL",
+        "description": "Opens the TalkBack audio ducking settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0349",
+        "message": "View Reset Options",
+        "type": "onClickURL",
+        "description": "Opens the TalkBack verbosity preset settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0357",
+        "message": "View Device Details",
+        "type": "onClickURL",
+        "description": "Opens the available devices on share panel settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0360",
+        "message": "View Device Details",
+        "type": "onClickURL",
+        "description": "Opens the sharing with Apple devices settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0370",
+        "message": "View Sound Settings",
+        "type": "onClickURL",
+        "description": "Opens the screen recorder audio source settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0387",
+        "message": "View Magnification Settings",
+        "type": "onClickURL",
+        "description": "Opens the high contrast keyboard settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0388",
+        "message": "View Magnification Settings",
+        "type": "onClickURL",
+        "description": "Opens the keyboard swipe controls settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0393",
+        "message": "View Magnification Settings",
+        "type": "onClickURL",
+        "description": "Opens the speak keyboard input aloud settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0394",
+        "message": "View Magnification Settings",
+        "type": "onClickURL",
+        "description": "Opens the keyboard touch and hold delay settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0396",
+        "message": "View Magnification Settings",
+        "type": "onClickURL",
+        "description": "Opens the keyboard toolbar settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0478",
+        "message": "View Device Details",
+        "type": "onClickURL",
+        "description": "Opens the device status diagnosis settings page in Samsung Members on the device."
+      },
+      {
+        "id": "DL-0484",
+        "message": "View Timeout Settings",
+        "type": "onClickURL",
+        "description": "Opens the real-time data priority processing settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0491",
+        "message": "View Timeout Settings",
+        "type": "onClickURL",
+        "description": "Opens the automatic date and time settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0493",
+        "message": "View Timeout Settings",
+        "type": "onClickURL",
+        "description": "Opens the automatic time zone settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0497",
+        "message": "Enable Adaptive Display",
+        "type": "offURL",
+        "description": "Disables brightness optimization via TV Settings on the device."
+      },
+      {
+        "id": "DL-0498",
+        "message": "Enable Adaptive Display",
+        "type": "onURL",
+        "description": "Enables brightness optimization via TV Settings on the device."
+      },
+      {
+        "id": "DL-0514",
+        "message": "Check Battery Performance",
+        "type": "onClickURL",
+        "description": "Opens the fast cable charging settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0515",
+        "message": "Check Battery Performance",
+        "type": "onClickURL",
+        "description": "Opens the fast wireless charging settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0516",
+        "message": "Check Battery Performance",
+        "type": "onClickURL",
+        "description": "Opens the charging information on Always On Display settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0533",
+        "message": "View Mouse Keys Settings",
+        "type": "onClickURL",
+        "description": "Opens the cursor acceleration settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0534",
+        "message": "View Device Details",
+        "type": "onClickURL",
+        "description": "Opens the connected devices settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0535",
+        "message": "Adjust Volume",
+        "type": "updateURL",
+        "description": "Updates the notification sound to a specified value via device Settings on the device."
+      },
+      {
+        "id": "DL-0562",
+        "message": "Adjust Volume",
+        "type": "updateURL",
+        "description": "Updates the TV sound mode to a specified value via TV Settings on the device."
+      },
+      {
+        "id": "DL-0565",
+        "message": "View Magnification Settings",
+        "type": "onClickURL",
+        "description": "Opens the keyboard settings settings page in device Settings on the device."
+      },
+      {
+        "id": "DL-0575",
+        "message": "Enable Zen Mode",
+        "type": "updateURL",
+        "description": "Updates the calls and messages in Do Not Disturb to a specified value via device Settings on the device."
+      }
+    ]
+  },
+  "unresolved": {
+    "provider": "stub:offline-structural-parser",
+    "decisions": [
+      {
+        "decision": "none",
+        "reason": "manual_category_forbids_deeplink",
+        "n": 28
+      },
+      {
+        "decision": "none",
+        "reason": "physical_interaction_not_a_settings_screen",
+        "n": 5
+      },
+      {
+        "decision": "dummy_positive",
+        "reason": "settings_screen_absent_from_catalog",
+        "n": 2
+      }
+    ],
+    "gaps": [
+      {
+        "row": "row_20",
+        "article": "Screen does not rotate on Galaxy phone or tablet",
+        "action": "Perform A Factory Data",
+        "decision": "dummy_positive",
+        "reason": "settings_screen_absent_from_catalog",
+        "nearest": [
+          {
+            "id": "DL-0022",
+            "message": "View Reset Options",
+            "verdict": "reject:concept"
+          },
+          {
+            "id": "DL-0289",
+            "message": "View Circle to Search",
+            "verdict": "reject:concept"
+          },
+          {
+            "id": "DL-0349",
+            "message": "View Reset Options",
+            "verdict": "reject:concept"
+          }
+        ]
+      },
+      {
+        "row": "row_21",
+        "article": "Touchscreen issues on a Galaxy phone or tablet",
+        "action": "Factory Data Reset",
+        "decision": "dummy_positive",
+        "reason": "settings_screen_absent_from_catalog",
+        "nearest": [
+          {
+            "id": "DL-0139",
+            "message": "View Click Settings",
+            "verdict": "reject:concept"
+          },
+          {
+            "id": "DL-0328",
+            "message": "Disable Replace swipe with single tap",
+            "verdict": "reject:polarity"
+          },
+          {
+            "id": "DL-0329",
+            "message": "Enable Replace swipe with single tap",
+            "verdict": "reject:polarity"
+          }
+        ]
+      }
+    ]
+  }
+}

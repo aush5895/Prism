@@ -90,10 +90,16 @@ def score_cases(cases: Sequence[synthetic.Case], gates=None) -> Dict[str, Any]:
     """
     catalog = get_catalog()
     correct = wrong = abstained = 0
+    # Exact answers on an entry whose own description does not support its label. The
+    # gold set is built FROM labels, so it scores these as correct; this counter is the
+    # only place they show up. See pipeline/catalog_audit.py.
+    unsupported = 0
     wrong_examples: List[Dict[str, Any]] = []
 
     for case in cases:
         res = catalog.resolve_step(case.step, gates=gates)
+        if res.is_exact and res.catalog_id in catalog.unsupported_labels:
+            unsupported += 1
         if not res.is_exact:
             abstained += 1
         elif res.catalog_id in case.gold:
@@ -123,6 +129,8 @@ def score_cases(cases: Sequence[synthetic.Case], gates=None) -> Dict[str, Any]:
         "wrong_pct": pct(wrong, total),
         "abstained_pct": pct(abstained, total),
         "precision_pct": pct(correct, decided),
+        "emitted_unsupported_label": unsupported,
+        "emitted_unsupported_label_pct": pct(unsupported, decided),
         "wrong_examples": wrong_examples,
     }
 
@@ -298,6 +306,20 @@ class _margin:
 
     def __exit__(self, *exc):
         config.MARGIN_DELTA = self._previous
+
+
+class _label_check:
+    """Temporarily switch gate [4]'s label-support check, to measure what it changes."""
+
+    def __init__(self, on: bool):
+        self.on = on
+
+    def __enter__(self):
+        self._previous = config.CONCEPT_REQUIRE_LABEL_SUPPORT
+        config.CONCEPT_REQUIRE_LABEL_SUPPORT = self.on
+
+    def __exit__(self, *exc):
+        config.CONCEPT_REQUIRE_LABEL_SUPPORT = self._previous
 
 
 def run_margin_sweep(cases: Sequence[synthetic.Case]) -> Dict[str, Any]:
@@ -787,6 +809,9 @@ def build_report(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any]:
     catalog = get_catalog()
 
     resolution = score_cases(cases, gates=GATES_ALL)
+    with _label_check(False):
+        without_label_check = score_cases(cases, gates=GATES_ALL)
+    without_label_check.pop("wrong_examples", None)
     compliance = run_compliance(provider_name, rate_limit_rpm=rate_limit_rpm)
     # The cache evaluation reuses the plans the compliance run already produced, so
     # measuring the cache costs no extra LLM calls.
@@ -809,6 +834,7 @@ def build_report(provider_name: str, rate_limit_rpm: int = 0) -> Dict[str, Any]:
         "gold_set": synthetic.stats(),
         "compliance": compliance,
         "resolution": resolution,
+        "resolution_without_label_check": without_label_check,
         "ablation": run_ablation(cases),
         "margin_sweep": run_margin_sweep(cases),
         "scope_fields_comparison": run_scope_field_comparison(cases),
@@ -877,7 +903,25 @@ def render_metrics(report: Dict[str, Any]) -> str:
     add(f"| **Wrong** (resolved outside the gold class) | **{r['wrong_pct']}%** |")
     add(f"| Abstained (no exact match, degrades to `dummy_positive`) | {r['abstained_pct']}% |")
     add(f"| **Precision** (correct / decided) | **{r['precision_pct']}%** |")
+    if "emitted_unsupported_label" in r:
+        add(f"| Exact answers on an entry whose own description does not support its label "
+            f"| {r['emitted_unsupported_label']} |")
     add("")
+    if "emitted_unsupported_label" in r:
+        add("The last row is invisible to the rest of this table. The gold set is generated "
+            "from catalog labels, so an answer that follows a WRONG label scores as correct: "
+            "`Enable Grayscale` (DL-0163) is described as enabling mono audio. Gate [4] "
+            "refuses such entries (`pipeline/catalog_audit.py`).")
+        off = report.get("resolution_without_label_check")
+        if off:
+            add("")
+            add(f"Measured with that check switched off, on the same gold set: "
+                f"accuracy@1 {off['accuracy_at_1_pct']}%, precision {off['precision_pct']}%, "
+                f"wrong {off['wrong_pct']}%, and **{off['emitted_unsupported_label']}** exact "
+                f"answers on such entries. The check lowers the gold-set numbers because the "
+                f"gold set rewards following a wrong label; the entries are listed in "
+                f"`docs/catalog_health.md`.")
+        add("")
     add("Wrong and abstained are reported separately on purpose. An abstention degrades to "
         "`bixby://dummy_positive`, which still opens a Settings screen; a wrong deeplink "
         "sends the user somewhere else entirely. Only the second reaches the user as a "

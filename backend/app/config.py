@@ -37,6 +37,10 @@ SCHEMA_SHA256 = "649440e0309b25dc5363039fc28dd7f21b71177779b909def8757b41e76ebf6
 
 # ---- resolver gates (contract §5) ----
 CONCEPT_COVERAGE_MIN = float(os.getenv("PRISM_CONCEPT_COVERAGE_MIN", "0.60"))  # gate [4]
+# Gate [4] also refuses a candidate whose own description does not support its label
+# (pipeline/catalog_audit.py). Switchable so run_eval can measure what it costs.
+CONCEPT_REQUIRE_LABEL_SUPPORT = os.getenv("PRISM_CONCEPT_REQUIRE_LABEL_SUPPORT", "1") \
+    not in ("0", "false", "False")
 MARGIN_DELTA = float(os.getenv("PRISM_MARGIN_DELTA", "0.08"))                 # gate [5]
 CANDIDATE_POOL = int(os.getenv("PRISM_CANDIDATE_POOL", "40"))                 # gate [1]
 

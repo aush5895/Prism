@@ -18,6 +18,7 @@ import yaml
 from rank_bm25 import BM25Okapi
 
 from .. import config
+from .catalog_audit import unsupported_ids
 from ..text import content, contains_any, coverage, subject_of, tokens, word_count
 
 # ---------------------------------------------------------------- intent parsing
@@ -163,6 +164,9 @@ class DeeplinkCatalog:
         ]
         self._bm25 = BM25Okapi([tokens(d) for d in self._docs])
         self._lex = load_lexicons()
+        # Entries whose own description does not support their label; see
+        # catalog_audit.py. Gate [4] will not trust them to be the screen they name.
+        self.unsupported_labels = unsupported_ids(self.entries)
 
     def __len__(self) -> int:
         return len(self.entries)
@@ -235,6 +239,12 @@ class DeeplinkCatalog:
                     verdict = f"reject:scope({hit})"    # gate [3]
                 elif GATE_CONCEPT in active and cov < config.CONCEPT_COVERAGE_MIN:
                     verdict = "reject:concept"          # gate [4]
+                elif (GATE_CONCEPT in active and config.CONCEPT_REQUIRE_LABEL_SUPPORT
+                      and e["id"] in self.unsupported_labels):
+                    # Gate [4] asks whether a candidate is really about the step's target.
+                    # A candidate whose own description does not support its label is not
+                    # the screen its label names: "Enable Grayscale" enables mono audio.
+                    verdict = "reject:label"            # gate [4]
                 else:
                     verdict = "eligible"
                     survivors.append((norm, e, intent))
