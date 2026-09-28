@@ -381,18 +381,22 @@ export default function App() {
               steps={steps}
               activeStep={activeStep}
               setActiveStep={setActiveStep}
+              replayedFrom={result.debug.grounding_from?.cold_run_query}
             />
           ) : (
             <section className="panel">
               <h2><span className="n">2</span> Where each step came from</h2>
               <p className="empty">
-                Served from cache — grounding and extraction did not run. Change the
-                article to see this panel populated.
+                No article was supplied with this request, so there is nothing to trace
+                the steps to.
               </p>
             </section>
           )}
           <PlanPanel response={result.envelope.response} />
-          <ResolverPanel resolutions={result.debug.resolutions} />
+          <ResolverPanel
+            resolutions={result.debug.resolutions}
+            replayedFrom={result.debug.grounding_from?.cold_run_query}
+          />
         </div>
       )}
 

@@ -110,6 +110,11 @@ class CachedPlan:
     model: Optional[str]
     evidence_key: Optional[str] = None
     stored_at: float = field(default_factory=time.time)
+    # How the plan was grounded on its cold run: per-step spans, the resolver trace and
+    # the score terms. Debug surface only -- never part of the graded response. Safe to
+    # replay on a hit because a hit REQUIRES the same article (evidence_key), so the
+    # spans still point at the text they were measured against.
+    grounding: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -160,6 +165,9 @@ class SemanticCache:
         self._matrix: Optional[np.ndarray] = None     # (n, d) normalised, or None
         self._encoded = 0                             # rows of _keys already in _matrix
         self._evidence_rows: Optional[np.ndarray] = None   # article per row, for the mask
+        # Article text by evidence key, stored ONCE per article rather than per plan: the
+        # kit has 11 articles behind 20 rows, and a production corpus clusters the same way.
+        self._articles: Dict[str, str] = {}
         self._embedder_failed = False                 # no backend; L1 off, L0 still on
 
         self.stats: Dict[str, int] = {
@@ -207,7 +215,8 @@ class SemanticCache:
     # ------------------------------------------------------------------ storing
     def store(self, enriched: EnrichedQuery, response: Dict[str, Any],
               query_variations: Sequence[str], model: Optional[str] = None,
-              evidence: Optional[str] = None) -> int:
+              evidence: Optional[str] = None, grounding: Optional[Dict[str, Any]] = None,
+              article_text: Optional[str] = None) -> int:
         """Store a VALIDATED plan under its canonical query and every variation.
 
         Callers must not call this for a fallback or an empty plan; `store_if_valid`
@@ -221,9 +230,12 @@ class SemanticCache:
             domain=enriched.domain,
             model=model,
             evidence_key=evidence,
+            grounding=grounding,
         )
         seeds = self._seed_keys(enriched, query_variations)
         with self._lock:
+            if evidence and article_text:
+                self._articles.setdefault(evidence, article_text)
             self._l0[(enriched.canonical, evidence)] = plan
             self._l0_latest[enriched.canonical] = plan
             self._evidence_rows = None
@@ -248,7 +260,9 @@ class SemanticCache:
 
     def store_if_valid(self, enriched: EnrichedQuery, response: Dict[str, Any],
                        query_variations: Sequence[str], fallback: Optional[str],
-                       model: Optional[str] = None, evidence: Optional[str] = None) -> int:
+                       model: Optional[str] = None, evidence: Optional[str] = None,
+                       grounding: Optional[Dict[str, Any]] = None,
+                       article_text: Optional[str] = None) -> int:
         """The only storing path the pipeline uses. A cache that remembers failures
         serves them faster, so nothing without a real plan is ever written."""
         if fallback:
@@ -257,7 +271,12 @@ class SemanticCache:
         if not contexts or not contexts[0].get("actions"):
             return 0
         return self.store(enriched, response, query_variations, model=model,
-                          evidence=evidence)
+                          evidence=evidence, grounding=grounding, article_text=article_text)
+
+    def article(self, evidence: Optional[str]) -> Optional[str]:
+        """The article text a cached plan's spans were measured against."""
+        with self._lock:
+            return self._articles.get(evidence) if evidence else None
 
     @staticmethod
     def _seed_keys(enriched: EnrichedQuery, variations: Sequence[str]) -> List[str]:
@@ -299,6 +318,8 @@ class SemanticCache:
         live = {id(p) for p in self._plans}
         self._l0 = {k: v for k, v in self._l0.items() if id(v) in live}
         self._l0_latest = {k: v for k, v in self._l0_latest.items() if id(v) in live}
+        referenced = {p.evidence_key for p in self._plans}
+        self._articles = {k: v for k, v in self._articles.items() if k in referenced}
         self.stats["keys"] = len(self._keys)
 
     # ------------------------------------------------------------------ lookup
@@ -502,6 +523,7 @@ class SemanticCache:
         with self._lock:
             self._l0.clear()
             self._l0_latest.clear()
+            self._articles.clear()
             self._evidence_rows = None
             self._keys.clear()
             self._plans.clear()
@@ -517,6 +539,7 @@ class SemanticCache:
             return {
                 **self.stats,
                 "entries": len(self._plans),
+                "articles": len(self._articles),
                 "distinct_plans": len({id(p) for p in self._plans}),
                 "hit_rate_pct": round(100.0 * (self.stats["l0_hits"] + self.stats["l1_hits"])
                                       / total, 1),

@@ -33,7 +33,7 @@ export function EnrichmentPanel({ query, enrichment }) {
 // ----------------------------------------------------------------- 2. grounding
 // Renders the article once, splicing in <mark> at the span offsets the backend verified.
 // Overlapping spans are merged so the text is never duplicated or dropped.
-export function GroundingPanel({ evidence, spans, steps, activeStep, setActiveStep }) {
+export function GroundingPanel({ evidence, spans, steps, activeStep, setActiveStep, replayedFrom }) {
   const text = evidence?.text || ''
   const located = spans.filter((s) => s.start !== null && s.start !== undefined)
 
@@ -69,6 +69,15 @@ export function GroundingPanel({ evidence, spans, steps, activeStep, setActiveSt
         </span>
       </h2>
 
+      {replayedFrom && (
+        // A cache hit re-uses the grounding measured when the plan was built. Said
+        // plainly, so replayed spans are never mistaken for a fresh measurement.
+        <p className="replayed">
+          Served from cache. These spans were measured on the cold run that built this
+          plan, for: <em>{replayedFrom}</em>
+        </p>
+      )}
+
       <div className="article">{pieces}</div>
 
       <ul className="steplist" style={{ marginTop: 12 }}>
@@ -93,7 +102,7 @@ export function GroundingPanel({ evidence, spans, steps, activeStep, setActiveSt
 }
 
 // ----------------------------------------------------------------- 3. resolver
-export function ResolverPanel({ resolutions }) {
+export function ResolverPanel({ resolutions, replayedFrom }) {
   if (!resolutions?.length) return null
   return (
     <section className="panel wide">
@@ -101,6 +110,12 @@ export function ResolverPanel({ resolutions }) {
         <span className="n">3</span> Why this screen was chosen
         <span className="note">gates [2] polarity · [3] scope · [4] target concept · [5] margin</span>
       </h2>
+      {replayedFrom && (
+        <p className="replayed">
+          Served from cache: the resolver did not run for this request. This is the trace
+          from the cold run that built the plan, for: <em>{replayedFrom}</em>
+        </p>
+      )}
       {resolutions.map((r, i) => (
         <div className="resolution" key={i}>
           <div className="head">

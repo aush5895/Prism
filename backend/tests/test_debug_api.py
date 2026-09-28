@@ -118,8 +118,14 @@ def test_catalog_ids_prove_every_emitted_uri_came_from_the_catalog(debug_run):
 
 
 def test_catalog_ids_survive_a_cache_hit(row21):
-    """A cached plan never runs the resolver, so the trace is gone -- but the proof panel
-    must still be able to name the entry behind each URI."""
+    """A cached plan never runs the resolver -- but the proof panel must still be able to
+    name the entry behind each URI.
+
+    This test used to assert that a hit carries NO resolver trace, so the debug view could
+    not present one as if the resolver had run. A hit now replays the cold run's trace
+    (LIMITATIONS: the grounding view went blank on the fastest path). The rule it guarded
+    is kept in a stronger form: the resolver demonstrably did not run on the hit, and any
+    trace shown is labelled as replayed and is exactly the cold run's."""
     from app.pipeline.cache import reset_cache
 
     reset_cache()
@@ -133,7 +139,11 @@ def test_catalog_ids_survive_a_cache_hit(row21):
     envelope = run_pipeline(request, provider=provider, debug_sink=warm)
 
     assert envelope.meta.cache_hit is True
-    assert "resolutions" not in warm, "a cache hit runs no resolver"
+    assert "resolve_and_order" not in envelope.meta.stage_latency_ms, \
+        "a cache hit runs no resolver"
+    if "resolutions" in warm:
+        assert warm.get("grounding_from"), "a replayed trace must say it is replayed"
+        assert warm["resolutions"] == cold["resolutions"]
     assert warm["catalog_ids"] == cold["catalog_ids"]
     reset_cache()
 

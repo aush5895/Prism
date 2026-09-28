@@ -493,3 +493,52 @@ def test_another_articles_near_match_is_still_audited_as_an_evidence_refusal(cac
     assert result.guard_rejected is True
     assert "evidence" in (result.guard_reason or "")
     assert cache.hit_log[-1]["guard_rejected"] is True
+
+
+# ----------------------------------------------------------------- grounding on a hit
+def test_a_cache_hit_shows_the_grounding_the_plan_was_built_from(row21):
+    """REGRESSION, recorded in LIMITATIONS.md: a hit returned the plan with no evidence,
+    so the 'where each step came from' view went blank exactly when the system was
+    fastest. A hit now replays the cold run's spans and resolver trace, labelled as such.
+    Replaying is sound because a hit requires the SAME article."""
+    from app.contracts import TroubleshootRequest
+    from app.llm.replay import ReplayProvider
+    from app.main import run_pipeline
+
+    request = TroubleshootRequest(query=row21["original_query"],
+                                  siis_response=row21["siis_response"])
+    provider = ReplayProvider(FIXTURES / "extraction_row21.json")
+    cold, warm = {}, {}
+    run_pipeline(request, provider=provider, debug_sink=cold, use_cache=True)
+    envelope = run_pipeline(request, provider=provider, debug_sink=warm, use_cache=True)
+
+    assert envelope.meta.cache_hit is True
+    assert warm["evidence"]["text"] == cold["evidence"]["text"]
+    assert warm["spans"] == cold["spans"] and warm["spans"]
+    assert warm["resolutions"] == cold["resolutions"]
+    assert warm["grounding_from"]["cold_run_query"] == row21["original_query"]
+    assert "grounding_from" not in cold, "a cold run must not claim to be a replay"
+    for span in warm["spans"]:
+        if span.get("start") is not None:
+            assert 0 <= span["start"] < span["end"] <= len(warm["evidence"]["text"])
+
+
+def test_each_article_is_stored_once_however_many_plans_cite_it(cache):
+    article = evidence_key("Touchscreen article body")
+    for i, text in enumerate(["screen touch lag", "touch lag camera", "screen sound"]):
+        cache.store(enrich(f"Galaxy S22 {text} {i}"), _plan(), [text], evidence=article,
+                    grounding={"spans": []}, article_text="Touchscreen article body")
+    assert cache.snapshot()["articles"] == 1
+    assert cache.article(article) == "Touchscreen article body"
+
+
+def test_eviction_drops_an_article_no_plan_cites_any_more():
+    small = SemanticCache(embedder=FakeEmbedder(), similarity_min=0.9, max_entries=3)
+    old, new = evidence_key("Old article"), evidence_key("New article")
+    small.store(enrich("Galaxy S22 screen lag"), _plan(), ["screen lag"], evidence=old,
+                article_text="Old article")
+    for i in range(4):
+        small.store(enrich(f"Galaxy S22 battery drain {i}"), _plan(), [f"battery {i}"],
+                    evidence=new, article_text="New article")
+    assert small.article(old) is None
+    assert small.article(new) == "New article"

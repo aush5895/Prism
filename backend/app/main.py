@@ -121,6 +121,7 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
                     "source_query": lookup.source_query,
                 }
                 debug_sink["catalog_ids"] = _catalog_ids_for(lookup.plan.response, catalog)
+                _replay_grounding(debug_sink, lookup.plan, get_cache())
             meta.cache_hit = True
             meta.cost_usd = 0.0
             meta.model = lookup.plan.model or meta.model
@@ -160,26 +161,34 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
                 response = {"contexts": []}
         validate.assert_no_urls(response)
 
+    # Name the WINNER as well as the losers: panel 3 exists to show why one candidate beat
+    # the others, which is unreadable if only the rejects are named.
+    for entry in dbg.resolutions:
+        won = catalog.by_id.get(entry.get("catalog_id") or "")
+        entry["accepted_message"] = won.get("message") if won else None
+        entry["accepted_type"] = won.get("originalType") if won else None
+    # Spans come from the pipeline: assemble.build_response relocates and verifies them
+    # before scoring, so the UI and the confidence score read the same set rather than two
+    # independent guesses. Kept with the cached plan so a hit can show them too.
+    grounding = {
+        "evidence": {"title": evidence.title, "source": evidence.source,
+                     "source_id": evidence.source_id},
+        "alignment": alignment,
+        "resolutions": dbg.resolutions,
+        "score_terms": {"span_coverage": dbg.span_coverage,
+                        "deeplink_precision": dbg.deeplink_precision,
+                        "evidence_alignment": dbg.evidence_alignment},
+        "spans": dbg.spans,
+    }
+
     if debug_sink is not None:
         debug_sink["enrichment"] = enriched.model_dump()
-        debug_sink["evidence"] = {"text": evidence.text, "title": evidence.title,
-                                  "source": evidence.source, "source_id": evidence.source_id}
+        debug_sink["evidence"] = {"text": evidence.text, **grounding["evidence"]}
         debug_sink["alignment"] = alignment
         debug_sink["cache"] = {"tier": "miss", "similarity": None,
                                "matched_key": None, "source_query": None}
-        # Name the WINNER as well as the losers: panel 3 exists to show why one
-        # candidate beat the others, which is unreadable if only the rejects are named.
-        for entry in dbg.resolutions:
-            won = catalog.by_id.get(entry.get("catalog_id") or "")
-            entry["accepted_message"] = won.get("message") if won else None
-            entry["accepted_type"] = won.get("originalType") if won else None
         debug_sink["resolutions"] = dbg.resolutions
-        debug_sink["score_terms"] = {"span_coverage": dbg.span_coverage,
-                                     "deeplink_precision": dbg.deeplink_precision,
-                                     "evidence_alignment": dbg.evidence_alignment}
-        # Spans come from the pipeline now: assemble.build_response relocates and
-        # verifies them before scoring, so the UI and the confidence score read the
-        # same set rather than two independent guesses.
+        debug_sink["score_terms"] = grounding["score_terms"]
         debug_sink["spans"] = dbg.spans
         debug_sink["catalog_ids"] = _catalog_ids_for(response, catalog)
 
@@ -194,9 +203,31 @@ def run_pipeline(req: TroubleshootRequest, provider=None, use_cache: bool | None
     if caching:
         with timer.stage("cache_store"):
             get_cache().store_if_valid(enriched, response, variations, meta.fallback,
-                                       model=meta.model, evidence=evidence_id)
+                                       model=meta.model, evidence=evidence_id,
+                                       grounding=grounding, article_text=evidence.text)
 
     return _finish(req, variations, response, meta, timer)
+
+
+def _replay_grounding(debug_sink: Dict[str, Any], plan, cache) -> None:
+    """On a cache hit, show how the plan was grounded when it was built.
+
+    LIMITATIONS.md used to record that a hit left the grounding view blank, exactly when
+    the system is fastest. The spans are replayable because a hit requires the SAME
+    article: the evidence key is part of the cache key, so the text they index is the
+    text that was stored. Labelled as coming from the cold run, never as re-measured.
+    """
+    grounding = plan.grounding
+    text = cache.article(plan.evidence_key)
+    if not grounding or text is None:
+        return
+    debug_sink["evidence"] = {"text": text, **grounding["evidence"]}
+    debug_sink["alignment"] = grounding["alignment"]
+    debug_sink["resolutions"] = grounding["resolutions"]
+    debug_sink["score_terms"] = grounding["score_terms"]
+    debug_sink["spans"] = grounding["spans"]
+    debug_sink["grounding_from"] = {"cold_run_query": plan.source_query,
+                                    "stored_at": plan.stored_at}
 
 
 def _catalog_ids_for(response: Dict[str, Any], catalog) -> Dict[str, str]:
