@@ -4,7 +4,7 @@ import {
   troubleshoot,
 } from './api.js'
 import {
-  EnrichmentPanel, GroundingPanel, PlanPanel, ResolverPanel, TelemetryPanel,
+  ArticleFitPanel, EnrichmentPanel, GroundingPanel, PlanPanel, ResolverPanel, TelemetryPanel,
 } from './panels.jsx'
 import { AnalyzingCard, CustomerView, EntryCard } from './customer.jsx'
 import { GuidedView } from './guided.jsx'
@@ -349,6 +349,7 @@ export default function App() {
               onRestart={restart}
               onGuide={() => startGuided()}
               guideBusy={guidedBusy}
+              onAgent={() => goBeat(7)}
             />
           )}
 
@@ -397,6 +398,7 @@ export default function App() {
               </p>
             </section>
           )}
+          <ArticleFitPanel fit={result.envelope.meta.article_fit} />
           <PlanPanel response={result.envelope.response} />
           <ResolverPanel
             resolutions={result.debug.resolutions}

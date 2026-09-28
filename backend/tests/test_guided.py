@@ -480,3 +480,40 @@ def test_a_short_fragment_starting_with_a_digit_is_not_a_sentence():
     """REGRESSION, found on re-review: operator precedence let '3 erase.' through."""
     assert guided._is_whole_sentence("3 erase.") is False
     assert guided._is_whole_sentence("3 steps will erase all your personal data.") is True
+
+
+# ----------------------------------------------------------------- article fit
+def _plan_with_fit(fit):
+    plan = _plan("manual", "auto")
+    plan["meta"]["article_fit"] = fit
+    return plan
+
+
+def test_problems_the_article_does_not_cover_reach_the_agent():
+    """Guided mode can only walk what the article covers. What it does not cover must
+    not be lost: it is in the view for the customer and in the handoff for the agent."""
+    fit = {"fit": "partial", "covered": 1, "total": 2, "issues": [
+        {"issue": "touch is laggy", "covered": True},
+        {"issue": "screen cracked at the fold", "covered": False}]}
+    store, session = _open(_plan_with_fit(fit))
+    assert session.view()["not_covered"] == ["screen cracked at the fold"]
+    store.apply(session.session_id, "escalate")
+    handoff = session.view()["handoff"]
+    assert handoff["not_covered_by_article"] == ["screen cracked at the fold"]
+    assert "Not covered by the article: screen cracked at the fold" in handoff["text"]
+
+
+def test_an_article_that_covers_nothing_is_said_plainly_in_the_handoff():
+    fit = {"fit": "none", "covered": 0, "total": 1,
+           "issues": [{"issue": "screen flashes", "covered": False}]}
+    store, session = _open(_plan_with_fit(fit))
+    store.apply(session.session_id, "escalate")
+    assert "does not cover any problem" in session.view()["handoff"]["text"]
+
+
+def test_an_unknown_fit_is_never_reported_as_a_gap():
+    store, session = _open(_plan_with_fit({"fit": "unknown", "total": 0, "issues": []}))
+    store.apply(session.session_id, "escalate")
+    view = session.view()
+    assert view["not_covered"] == [] and view["handoff"]["not_covered_by_article"] == []
+    assert "Article fit" not in view["handoff"]["text"]

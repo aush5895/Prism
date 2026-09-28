@@ -264,8 +264,47 @@ export function OpenButton({ deeplink, validation, catalogId, open, onToggle }) 
 }
 
 // --------------------------------------------------------------------- beats 3, 4, 6
+// Does the supplied article cover what the customer described? Judged by the one
+// extraction call and believed only where its quoted sentence is found in the article
+// (pipeline/article_fit.py). "unknown" renders nothing: no verdict is not a verdict.
+export function FitBanner({ fit, onAgent }) {
+  if (!fit || !fit.total || fit.fit === 'unknown') return null
+  const lead = fit.fit === 'full'
+    ? 'The article covers everything you described.'
+    : fit.fit === 'none'
+      ? 'This article does not seem to cover what you described.'
+      : `This article covers ${fit.covered} of the ${fit.total} problems you described.`
+  return (
+    <section className={`fit fit--${fit.fit}`} aria-live="polite">
+      <div className="fit-lead">{lead}</div>
+      <ul className="fit-list">
+        {fit.issues.map((i) => (
+          <li key={i.issue} className={i.covered ? 'yes' : 'no'}
+              title={i.covered ? `From the article: ${i.evidence}` : 'The article gives no steps for this'}>
+            <span className="fit-mark">{i.covered ? 'Covered' : 'Not covered'}</span>
+            {i.issue}
+          </li>
+        ))}
+      </ul>
+      {fit.fit !== 'full' && (
+        <p className="fit-note">
+          {fit.fit === 'none'
+            ? 'The steps below come from the article supplied with your request and may not help.'
+            : 'The steps below address what the article covers. An agent can take the rest.'}
+          {onAgent && (
+            <>
+              {' '}
+              <button type="button" className="linkish" onClick={onAgent}>Talk to an agent</button>
+            </>
+          )}
+        </p>
+      )}
+    </section>
+  )
+}
+
 export function CustomerView({
-  envelope, catalogIds = {}, focus = null, onRestart, onGuide, guideBusy = false,
+  envelope, catalogIds = {}, focus = null, onRestart, onGuide, guideBusy = false, onAgent,
 }) {
   const context = envelope?.response?.contexts?.[0]
   const actions = context?.actions || []
@@ -361,6 +400,8 @@ export function CustomerView({
           </button>
         )}
       </header>
+
+      <FitBanner fit={envelope?.meta?.article_fit} onAgent={onAgent} />
 
       {actions.map((action, i) => {
         // Badge from the emitted `category` ONLY. Never from deeplink presence: an auto

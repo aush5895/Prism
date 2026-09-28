@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import config
+from .pipeline import article_fit as fit_mod
 from .pipeline import spans
 from .pipeline.deeplinks import load_lexicons
 from .pipeline.validate import URL_PATTERN
@@ -224,6 +225,8 @@ class GuidedSession:
     actions: List[Dict[str, Any]]
     cache_hit: bool
     fallback: Optional[str]
+    # meta.article_fit from the envelope: which described problems the article covers.
+    article_fit: Optional[Dict[str, Any]] = None
     status: str = ACTIVE
     cursor: int = 0
     confirmed: set = field(default_factory=set)
@@ -319,6 +322,10 @@ class GuidedSession:
             "attempts": [a.__dict__ for a in self.attempts],
             "resolved_by": self.resolved_by,
             "cache_hit": self.cache_hit,
+            "article_fit": self.article_fit,
+            # Problems the customer described that the article does not address. Guided
+            # mode cannot walk these; they go to the agent in the handoff.
+            "not_covered": fit_mod.uncovered(self.article_fit),
         }
         if self.status in (ESCALATED, NO_PLAN):
             out["handoff"] = build_handoff(self)
@@ -396,6 +403,13 @@ def build_handoff(session: GuidedSession) -> Dict[str, Any]:
         lines.append(f"Symptoms: {', '.join(_clean(s) for s in session.symptoms)}")
     if session.article_title:
         lines.append(f"Knowledge article: {_clean(session.article_title)}")
+    not_covered = [_clean(i) for i in fit_mod.uncovered(session.article_fit)]
+    fit = (session.article_fit or {}).get("fit")
+    if fit == fit_mod.NONE:
+        lines.append("Article fit: the article does not cover any problem the customer "
+                     "described; its steps may not apply.")
+    elif not_covered:
+        lines.append(f"Not covered by the article: {'; '.join(not_covered)}")
     lines.append(f"Why handed off: {reason_label}")
     lines.append(headline)
     if tried:
@@ -414,6 +428,8 @@ def build_handoff(session: GuidedSession) -> Dict[str, Any]:
         "domain": session.domain,
         "symptoms": [_clean(s) for s in session.symptoms],
         "article_title": _clean(session.article_title) or None,
+        "not_covered_by_article": not_covered,
+        "article_fit": fit,
         "tried": tried,
         "declined": declined,
         "skipped": skipped,
@@ -460,6 +476,7 @@ class SessionStore:
             actions=actions,
             cache_hit=bool(meta.get("cache_hit")),
             fallback=meta.get("fallback"),
+            article_fit=meta.get("article_fit"),
         )
         if not actions:
             session.status, session.end_reason = NO_PLAN, REASON_NO_PLAN

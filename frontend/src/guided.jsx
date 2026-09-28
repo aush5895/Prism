@@ -207,6 +207,19 @@ function Handoff({ handoff, onRestart }) {
           </ul>
         </div>
       )}
+      {handoff.not_covered_by_article?.length > 0 && (
+        <div className="g-list">
+          <div className="g-list-label">Not covered by the article</div>
+          <ul>
+            {handoff.not_covered_by_article.map((t) => (
+              <li key={t}>
+                <span className="g-list-name">{t}</span>
+                <span className="g-chip crit">No steps in the article</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {handoff.not_tried.length > 0 && (
         <div className="g-list">
           <div className="g-list-label">Not yet tried</div>
@@ -238,6 +251,27 @@ function Handoff({ handoff, onRestart }) {
   )
 }
 
+function FitNotice({ session, busy, onEscalate }) {
+  const missing = session.not_covered || []
+  const fit = session.article_fit?.fit
+  if (!missing.length || !['active', 'awaiting_confirmation'].includes(session.status)) return null
+  return (
+    <section className={`card g-fit${fit === 'none' ? ' g-fit--none' : ''}`}>
+      <div className="eyebrow">{fit === 'none' ? 'This article may not fit' : 'Not in this article'}</div>
+      <p className="g-lede">
+        {fit === 'none'
+          ? 'The article supplied with your request does not seem to cover what you described, so these steps may not help.'
+          : `This guide cannot help with: ${missing.join('; ')}. It goes to the agent if you need one.`}
+      </p>
+      {fit === 'none' && (
+        <button type="button" className="g-btn" disabled={busy} onClick={onEscalate}>
+          Talk to an agent now
+        </button>
+      )}
+    </section>
+  )
+}
+
 export function GuidedView({ session, envelope, catalogIds = {}, busy, onAnswer, onConfirm, onEscalate, onRestart, onExit }) {
   const context = envelope?.response?.contexts?.[0]
   const actions = context?.actions || []
@@ -253,6 +287,8 @@ export function GuidedView({ session, envelope, catalogIds = {}, busy, onAnswer,
           <button type="button" className="linkish" onClick={onExit}>← See the whole plan</button>
         )}
       </header>
+
+      <FitNotice session={session} busy={busy} onEscalate={onEscalate} />
 
       {session.status === 'awaiting_confirmation' && current && (
         <SafetyGate current={current} busy={busy} onConfirm={onConfirm} />
