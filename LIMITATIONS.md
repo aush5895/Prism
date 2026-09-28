@@ -42,8 +42,8 @@ The harness already reports it per row, so the trigger is visible without new wo
 **The idea:** add an embedding retrieval leg alongside BM25 in gate [1], and keep it only
 if it beats the lexical floor on the ablation.
 
-**Why it was cut.** The floor it has to beat is **90.1% accuracy@1 and 99.2% precision**,
-with wrong deeplinks at 0.7% — six wrong answers in 850 cases. Measuring a replacement
+**Why it was cut.** The floor it has to beat is the shipped resolver on the 850-case gold
+set (`docs/metrics.md` §2: 88.1% accuracy@1, 98.7% precision, 10 wrong answers). Measuring a replacement
 honestly at that level means resolving the ambiguity in the gold set itself, because the
 remaining errors are not retrieval failures. All six share one shape: a candidate whose
 content tokens are a *subset* of the step's scores coverage 1.0 with no penalty for
@@ -61,7 +61,7 @@ vocabulary with its catalog entry. Those cases currently abstain, which degrades
 `dummy_positive` and still opens a Settings screen — the safe direction.
 
 **What would change the decision.** A measured ablation run showing a dense or hybrid leg
-above 90.1% / 99.2%. `evaluation/run_eval.py` already supports switchable gates and a
+above the shipped figures in `docs/metrics.md` §2. `evaluation/run_eval.py` already supports switchable gates and a
 held-out split, so the experiment is cheap to run when there is time to run it properly.
 
 ---
@@ -72,9 +72,24 @@ held-out split, so the experiment is cheap to run when there is time to run it p
 
 - **A shorter catalog subject beats a longer correct one.** `coverage()` is one-directional:
   it measures how much of the *candidate* appears in the step, with no penalty for a
-  candidate that fails to explain the rest of the step. All 6 remaining wrong resolutions
-  have this shape. A length-aware or bidirectional coverage term is the obvious next
-  experiment and the harness can measure it.
+  candidate that fails to explain the rest of the step. Most of the 10 remaining wrong
+  resolutions have this shape; the clearest is "Change Zen Mode to the value you want."
+  resolving to `View Screen mode`, because "screen" is a noise word and the candidate's
+  whole subject is "mode". A step-side coverage term was tried and measured: it removed 1
+  of the 10 wrong answers and nothing else, so it was not adopted.
+- **Gate [4] refuses catalog entries whose own description does not support their
+  label, and that lowers the gold-set numbers.** 50 of 577 entries name a different screen
+  from the one they describe: `Enable Grayscale` (DL-0163) enables mono audio, `Enable
+  WiFi` (DL-0312) enables Mobile Hotspot. Before this check, "Tap the switch next to
+  Grayscale to enable it." resolved confidently to the mono audio toggle. The gold set is
+  generated from labels, so it scored all 18 such answers as correct; with the check on
+  there are 0, and precision on that gold set reads lower (99.2% off, 98.7% on). Of the 4
+  answers newly scored wrong, 2 are better answers the gold set cannot recognise
+  ("Change Volume" now opens the Volume settings page rather than the "sound mode" entry
+  labelled `Adjust Volume`) and 2 are the Zen Mode case above. The check is lenient by
+  design (plurals, hyphens, two-word forms and 6-letter stems all count as support), and
+  it is switchable with `PRISM_CONCEPT_REQUIRE_LABEL_SUPPORT=0`. The list of entries is
+  in `docs/catalog_health.md` §1.3.
 - **Gate [3] (scope) is not measurable by the current ablation.** V1 and V2 are identical.
   Every generated gold step carries its own entry's qualifier by construction, so the gate
   never rejects the answer and the candidates it does reject were outranked anyway. Its
@@ -89,10 +104,11 @@ held-out split, so the experiment is cheap to run when there is time to run it p
   abstained (766 to 765), never to wrong. Skipping the margin test when the tied
   candidates are in one equivalence class is the obvious fix and the harness can measure
   it.
-- **54 catalog message classes are not separable at all.** `View Notification Settings`
-  covers 21 different screens, distinguishable only by `description`, which gate [3]
-  deliberately does not read. Those cases are scored against the whole equivalence class
-  because no resolver could do better from the step alone.
+- **54 catalog labels cover more than one screen.** `View Notification Settings` covers 21
+  different screens, distinguishable only by `description`, which gate [3] deliberately
+  does not read. Those cases are scored against the whole equivalence class because no
+  resolver could do better from a step phrased from the label. 5 groups are identical on
+  every text field and cannot be told apart by any system (`docs/catalog_health.md` §1.2).
 
 ### 2.2 Source spans are relocated by content matching, not trusted from the model
 
@@ -139,8 +155,11 @@ overstate it.
 - **Gate [2] is flattered by construction.** Polarity is read after subtracting the
   candidate's own subject from the step, and in this gold set that subject is always
   present verbatim, so the subtraction always succeeds. On a real article that paraphrases
-  a setting, it falls back to reading the whole step and the gate is weaker than 99.2%
-  suggests.
+  a setting, it falls back to reading the whole step and the gate is weaker than the
+  gold-set precision suggests.
+- **It rewards following a wrong label.** Gold is built from each entry's `message`, so an
+  answer on an entry whose description contradicts its label scores as correct. The
+  harness now counts these separately (`docs/metrics.md` §2); see §2.1 above.
 
 ### 2.4 The semantic cache
 
@@ -177,6 +196,29 @@ overstate it.
   `performance`, while "s22 touch screen is super laggy and slow to react" reads as
   `display`, and the second was refused the first's cached plan. This is part of the 4
   points of hit rate the guard costs.
+
+- **Three scaling bugs, found by the 10k scale run (FIXED).** (1) Once the cache reached
+  its key cap, every store evicted, and eviction discarded the whole L1 matrix, so every
+  lookup after a store re-encoded every key: store-then-hit p95 went from 40 ms at 1,000
+  synthetic scenarios to 24,074 ms at 5,000. Eviction now slices the matrix. (2) The
+  article was checked after the search instead of partitioning it: L0 held one plan per
+  canonical query, so two articles receiving the same words overwrote each other, and L1
+  took the nearest key across every article, then missed if it belonged to another one.
+  Hit rate fell 93% → 54% → 12% → 8% as the corpus grew, and on the supplied kit all 8
+  held-out misses were guard rejections. Lookups are now partitioned by article; a
+  near-match from another article is still logged as an evidence refusal. (3) The
+  5,000-key cap held roughly 400-1,000 scenarios against a 10k+ target; it is now 120,000
+  keys (184 MB at 384 dimensions, scan p95 ~8 ms). Hit-rate figures in this section that
+  predate the partitioning come from the run before it; `docs/metrics.md` is current.
+- **The scale run is synthetic.** `evaluation/scale.py` recombines the 11 supplied
+  articles into up to 10,000 labelled-synthetic scenarios. It measures the cache, index and
+  memory, not extraction quality on unseen domains, and says so in its output. It counts a
+  hit on another scenario with the same article and the same supplied complaint as an
+  *equivalent* hit, matching how `run_eval` scores same-article hits, and keeps the
+  strictest count in `report.json`.
+- **A cache hit replays the grounding of the cold run that built the plan (FIXED: it
+  used to show none).** Sound because a hit requires the same article, so the spans index
+  the same text. Both engineer-view panels label replayed data as such.
 
 ### 2.5 The catalog URIs are masked and cannot launch anything
 
@@ -249,12 +291,49 @@ the intended one.
   too vague to action and omitted it. That is a defensible reading, but it is the model's
   judgement, not a rule the pipeline enforces.
 
-### 2.6 Operational
+### 2.6 The supplied article is trusted, not checked
+
+The engine builds its plan from the article supplied with the request (frozen decision
+2), and it does not detect when Samsung has paired a complaint with the wrong article.
+Phase 0 identified four such pairings in the kit (row_1, row_8, row_12, row_20); row_1 is
+a screen-flashing complaint supplied with *Email server not responding*. With the live
+provider row_1 yields a five-action plan, not a refusal.
+
+This was measured before deciding not to build a detector. `ground.evidence_alignment`
+scores row_1 at 0.311 and the other three at 0.315, 0.345 and 0.335: middle of the range,
+with five correctly paired rows scoring lower. No threshold separates them, and one
+mislabelled row among twenty cannot fit or validate one honestly. An earlier demo script
+described row_1 as the engine declining the article. That was wrong, and the demo beat
+built on it has been removed. What guided mode does offer here is a fast exit: a plan that
+does not help ends in an agent handoff carrying everything that was tried.
+
+### 2.7 Guided mode
+
+- **It has no resolution rate.** Whether a step fixed the problem needs real customers
+  answering; there are none. `docs/metrics.md` §6.1 reports only what the engine
+  guarantees: walk length, gated steps, and whether each destructive step is shown
+  Samsung's own warning.
+- **It does not learn.** Outcomes are counted in `/metrics` but never change a plan or its
+  order. Phase 0 rejected adaptive re-planning because it cannot be measured without real
+  users, and that has not changed.
+- **The safety gate's warning is only as good as the article.** A data-loss sentence is
+  quoted only for a destructive step and only if the article has one near it. The two
+  destructive steps in the kit both get Samsung's own warning; an article without one gets
+  the gate and an explicit "no specific warning" line, never text we wrote.
+- **Sessions live in process memory,** bounded at 2,000 with a one-hour idle TTL, like the
+  cache. A restart ends every session.
+- **"Destructive" is a lexicon match.** A step is treated as destroying data only if it
+  names an operation in `destructive_operation` (factory reset, erase all, wipe data). The
+  customer view therefore never says a step is safe; it says only whether the article
+  warns about it.
+
+### 2.8 Operational
 
 - **Cost is an estimate** from published per-token rates, not a billed figure.
 - **Gemini's free tier allows 15 `generate_content` calls per minute.** A 20-row live
   evaluation needs `--rate-limit-rpm 12` to stay under it.
-- **The frontend debug endpoint is not part of Samsung's contract.** `POST
-  /v1/troubleshoot/debug` and `GET /v1/samples` exist for the demo UI and are labelled
-  non-spec. The resolver trace they expose is a sibling of the graded `response`, never a
+- **The frontend and guided endpoints are not part of Samsung's contract.** `POST
+  /v1/troubleshoot/debug`, `GET /v1/samples` and `/v1/guided/*` exist for the demo UI and
+  guided mode and are labelled non-spec. Guided mode starts from `run_pipeline`, so the
+  plan it walks is exactly the graded response; a test asserts that. The resolver trace they expose is a sibling of the graded `response`, never a
   field inside it (guide §4.2.4).

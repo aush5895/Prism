@@ -559,3 +559,23 @@ Stated up front so the deck's Limitations slide is honest and the scope stays fi
 ---
 
 *Next step: your sign-off on §11, then Day 1 begins with the repo skeleton and the vertical slice.*
+
+---
+
+## Addendum, 28 September 2026 (deadline extended to 30 September)
+
+Recorded here rather than by editing the analysis above, so the original reasoning stays
+readable.
+
+- **"No multi-turn dialogue" (§ scope, above) is reversed for guided mode.** Guided mode
+  is multi-turn: it presents the validated plan one step at a time and asks whether each
+  worked. It is still **not** adaptive re-planning and has no learning loop, both of which
+  stay out of scope for the reason given in §7: they cannot be measured without real users.
+  `/v1/troubleshoot` and the graded response are unchanged.
+- **D5 "Honest `no_match` on bad context" (row_1) did not hold.** With the live provider,
+  row_1's email-server article still yields a five-action plan. `evidence_alignment`
+  scores the four mismatched pairings identified in §4.3 (row_1 0.311, row_8 0.315,
+  row_20 0.335, row_12 0.345) in the middle of the range, with five correctly paired rows
+  scoring lower, so no detector was built. See LIMITATIONS.md §2.6.
+- **Catalog labels are not always the screen.** 50 of 577 entries carry a label their own
+  description does not support; gate [4] now refuses them. See `docs/catalog_health.md`.

@@ -11,7 +11,7 @@ Read this fully before your first tool call in any session. It is binding.
 A REST API that converts a vague Galaxy device complaint into a grounded, ordered,
 schema-valid troubleshooting plan with verified in-app Settings deeplinks.
 
-**Deadline: 25 September 2026, 23:59 IST.** Submission is a GitHub repo tagged
+**Deadline: 30 September 2026, 23:59 IST** (extended from 25 September). Submission is a GitHub repo tagged
 `PRISM_GENAI_HACKATHON_Y2026`, a ≤5-minute demo video, and a PPT. Judging weights:
 working prototype 30%, technical depth 25%, innovation 20%, theme relevance 15%,
 presentation 10%.
@@ -58,8 +58,9 @@ contract is wrong, say so and stop; do not act on it unilaterally.
 8. **Envelope is `{query, query_variations, response, meta}`.** Only `response` is
    validated against `ContextDeeplinkResponse`. Never nest telemetry inside it.
 9. **`score` comes from the formula in contract §3.4.** The model never picks it.
-10. **Endpoints:** `POST /v1/troubleshoot` and `GET /health` are Samsung's. `GET /metrics`
-    is ours and is labelled non-spec.
+10. **Endpoints:** `POST /v1/troubleshoot` and `GET /health` are Samsung's. `GET /metrics`,
+    `POST /v1/troubleshoot/debug`, `GET /v1/samples` and `/v1/guided/*` are ours and are
+    labelled non-spec. None of them may change the graded response.
 
 ---
 
@@ -93,94 +94,65 @@ contract is wrong, say so and stop; do not act on it unilaterally.
 
 ## 5. Current state and what is next
 
-**Done:** Phase 0 · D1 backend vertical slice · D2 evaluation harness and gate ablation ·
-D3a live Gemini · D3b semantic cache. **118 tests green, no skips.**
+**Done:** Phase 0 · D1 backend · D2 evaluation harness and gate ablation · D3a live
+Gemini · D3b semantic cache · D4a demo UI · scale run · guided mode · grounding on cache
+hits · catalog audit and health report. **214 passed, 2 skipped** (the two run once
+`python -m evaluation.scale` has written a report). D3c and D4b were cut; see
+`LIMITATIONS.md` §1.
 
-**Measured** (`python -m evaluation.run_eval --provider gemini --rate-limit-rpm 12`,
-regenerates `evaluation/report.json` + `docs/metrics.md`; every figure below comes from
-that report, none is typed by hand):
+**Resolver figures** (850-case gold set; resolver only, so they do not depend on the LLM
+provider and are final): wrong deeplinks **31.8% → 1.2%** (V0 → V4), precision **68.2% →
+98.7%**, accuracy@1 **88.1%**, abstained 10.7%, and **0** exact answers on a catalog entry
+whose own description contradicts its label (**18** with that check off). Everything else
+(20-row compliance, cost, cache hit rate, guided per-row table) depends on the live
+provider: read it from `docs/metrics.md`, never from memory. Figures quoted before 28 Sep
+(99.2% precision, 0.7% wrong, 31.6%/68.4% at V0, 82-84% cache hit rate) are stale.
 
-| | |
-|---|---|
-| Extraction provider | `gemini:gemini-3.1-flash-lite` |
-| Gold set | 850 labelled steps over 425 catalog equivalence classes |
-| accuracy@1 | 90.1% |
-| Wrong deeplinks | 0.7% |
-| Abstained (degrades to `dummy_positive`) | 9.2% |
-| Precision | 99.2% |
-| Gate ablation, V0 → V4 | wrong 31.6% → 0.7%, precision 68.4% → 99.2% |
-| Schema-valid / rule-compliant, 20 rows | 100% / 100% |
-| URL leaks / catalog-invalid deeplinks | 0 / 0 |
-| Rows producing a plan | 20 / 20 |
-| Latency p50 / p95 (live provider, cold) | 4814 ms / 7724 ms |
-| Cost, 20 rows | $0.034 |
-| Cache hit rate, held-out paraphrases | 82.0% (target >= 80%) |
-| Cache cross-article false positives | 0.0% (target 0%) |
-| Cache fast path p95 | 81.8 ms (target <= 300 ms) |
+**Frozen since 28 Sep, in addition to §3:**
+1. **Gate [4] refuses a candidate whose own description does not support its label**
+   (`pipeline/catalog_audit.py`, verdict `reject:label`). It lowers gold-set precision
+   because the gold set is built from labels and rewards following a wrong one. Do not
+   switch it off to recover a headline number.
+2. **The cache is partitioned by article.** L0 is keyed on (canonical, evidence); L1 takes
+   its argmax within the requesting article; seed dedupe is per article. Eviction slices
+   the matrix, never discards it.
+3. **Guided mode reads the validated plan and never reorders it.** It lives in
+   `app/guided.py` behind non-spec `/v1/guided/*` endpoints. The safety gate is enforced by
+   the server (409), and a gate warning is ONLY ever a sentence quoted from the supplied
+   article, shown only for a destructive step. Never write warning text in code or UI.
+4. **The handoff is assembled with no model call** and never reports a declined or
+   skipped step as tried.
+5. **row_1 is not a refusal.** With the live provider it returns a five-action plan, and
+   no measured signal detects the mismatched pairing (LIMITATIONS §2.6). Do not describe it
+   as the engine declining, anywhere.
 
-Notes on the numbers, so they are not over-read:
-- The gold set is **derived from the catalog**, not human-labelled. Gold is an
-  equivalence class, because 54 `(message, originalType)` classes hold more than one
-  entry — `View Notification Settings` alone covers 21 different screens.
-- The ablation **cannot measure gate [3] (scope)**: V1 and V2 are identical, because
-  every generated step carries its own entry's qualifier by construction. The gate's
-  value is shown by the production regression test, not by the ablation.
-- `MARGIN_DELTA` stays at **0.08**: a seeded fit half preferred 0.02, but on the held-out
-  half that buys 7 correct answers at the cost of 3 more wrong ones. The declared rule
-  refuses any change that increases wrong deeplinks, whatever it gains.
+**Before submission, in this order:**
+1. `python -m evaluation.run_eval --provider gemini --rate-limit-rpm 12`
+2. `python -m evaluation.scale --max 10000` (MiniLM; minutes, not hours, since the
+   eviction fix)
+3. `python -m tools.catalog_health --provider gemini --rate-limit-rpm 12`
+4. `python -m pytest` must be 216 passed, 0 skipped once the scale report exists
+5. Copy every live-provider figure used in the deck or video from `docs/metrics.md`.
 
-Cache notes, so they are not over-read:
-- The cache key is **(query, article)**, not the query alone. `siis_response` arrives with
-  the request, so the plan is a function of both. Keyed on the query alone the held-out
-  cross-row error rate was 22% and no threshold from 0.40 to 0.90 fixed it: five supplied
-  rows are black-screen complaints with different articles, and "how to fix black screen"
-  contains nothing that separates them.
-- The 20 rows carry only **11 distinct articles**; six share one. Hits are scored against
-  the article equivalence class, so a hit on a sibling row with the same article is
-  reported separately rather than counted as a falsehood.
-- The similarity threshold stays at **0.60** although the fit half preferred 0.40. Every
-  threshold in the sweep shows zero cross-article false positives, so the sweep measures
-  the evidence key, not the threshold. 0.60 is a deliberate safety margin for the
-  within-article mismatch the corpus cannot exercise.
-- The **slot guard prevents nothing measurable here** and costs 4 points of hit rate,
-  for the same reason gate [3] shows no ablation delta: the corpus does not contain the
-  case it exists for.
+**Next lead, not actioned.** Most of the 10 remaining wrong answers share one shape: a
+candidate whose content tokens are a SUBSET of the step's scores coverage 1.0 ("Zen Mode"
+→ `View Screen mode`, because "screen" is a noise word). A step-side coverage term was
+measured on 28 Sep and removed 1 of the 10, so it was not adopted. Something stronger is
+needed, and the harness can measure it.
 
-**Fixed since D2:** `.env` was never loaded (nothing imported dotenv, so a configured
-key was invisible and `--provider gemini` failed unless exported by hand); and gate [2]
-read polarity from the whole step, so a setting whose own NAME contains "turn on"/"turn
-off" outvoted the instruction and sent an enable request to the disable entry. Intent is
-now parsed per candidate with that candidate's subject subtracted first. Wrong deeplinks
-fell 1.2% → 0.7%, precision 98.7% → 99.2%.
-
-**Next lead, not yet actioned.** All 6 remaining wrong answers share one shape: a
-candidate whose content tokens are a SUBSET of the step's scores coverage 1.0 with no
-penalty for failing to explain the rest of the step. "Charging Feedback" loses to
-"Charging"; "Relumino outline" loses to "Relumino outline shortcut"; "Double tap to turn
-on screen" loses to the "turn off" sibling because `content()` collapses both to
-`{double}`. A length-aware or bidirectional coverage term is the obvious next experiment,
-and the harness can now measure it.
-
-**Remaining, in strict order. Do not start one before the previous is green:**
-
-| # | Task | Why it matters |
-|---|---|---|
-| D3c | **Repair/retry loop.** Validation failure → one targeted repair → revalidate → `no_match` if still failing. Cap at 2 attempts. | Contract §3.3. Currently fails closed with no retry. |
-| D4a | **Frontend** (React + Vite). Not a chat window — it must *visualise the intelligence*: enrichment slots, the source article with matched steps highlighted by their character spans, and the resolver's accepted vs rejected candidates side by side. | Judges need to see *why* `Enable Touch sensitivity` won and `Disable` was rejected. |
-| D4b | **Dense retrieval leg**, only if it beats the current lexical floor on the ablation. Ship it or drop it on the measurement — do not assume it helps. | Floor to beat: 90.1% accuracy@1 / 99.2% precision. |
-| D5 | Demo script, video, PPT, `LIMITATIONS.md`, clean-container reproducibility check, release tag. | Submission requirements. |
-
-Cut order if time runs short: D4b → D4a polish → D3c. **Never cut:** schema validity, zero
-URL leaks, catalog integrity, the cache fast path, a reproducible README.
+Never cut: schema validity, zero URL leaks, catalog integrity, the cache fast path, the
+server-enforced safety gate, a reproducible README.
 
 ---
 
 ## 6. Commands
 
 ```bash
-python -m pytest                  # 118 tests, no API key needed
+python -m pytest                  # 214 passed, 2 skipped; no API key needed
 python -m evaluation.run_eval     # regenerate report.json + metrics.md (offline stub)
 python -m evaluation.run_eval --provider gemini --rate-limit-rpm 12   # live numbers
+python -m evaluation.scale --max 10000                                 # metrics.md §8
+python -m tools.catalog_health --provider gemini --rate-limit-rpm 12  # catalog_health.md
 python -m tools.demo_row21        # row_21 plan + resolver accept/reject trace
 python -m uvicorn app.main:app --app-dir backend --port 8000
 ```

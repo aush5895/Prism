@@ -53,6 +53,16 @@ No other fields are accepted. Unknown fields are rejected with `422` rather than
 
 `200 {"status": "ok"}` **only when** the embedding model is loaded, both indexes are built and the cache is attached — per Theme 2 guide §5: *"Returns HTTP 200 (`{"status": "ok"}`) when the caching layer, model connections, and vector indexes are fully initialized."* Until then `503`. This makes cold-start measurable instead of invisible.
 
+### `/v1/guided/*` — **ours, not Samsung's** (added 28 Sep)
+
+Guided mode walks the validated plan one action at a time: `POST /v1/guided/start` runs
+the normal pipeline and opens a session over its `response`; `answer`, `confirm` and
+`escalate` move it on. It reads the graded response and never produces or alters one; a
+test asserts the walked plan equals what `POST /v1/troubleshoot` returns. The safety gate
+before a `critical` action is enforced server-side (409 until confirmed), and any warning
+it shows is a sentence quoted from the supplied `siis_response`, only for a destructive
+action. See `backend/app/guided.py`.
+
 ### `GET /metrics` — **ours, not Samsung's**
 
 Explicitly marked non-spec in the README. Serves per-stage latency percentiles, cache hit/miss, token and cost counters. It exists so that §10 of your directives (metrics measured, never authored) has a single source.

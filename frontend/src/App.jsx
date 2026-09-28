@@ -63,7 +63,7 @@ export default function App() {
       .then((data) => {
         setSamples(data.samples)
         // row_21 is the strongest first impression: a full ten-action plan with real
-        // deeplinks. row_1 comes first in the file but is the deliberate no-match case.
+        // deeplinks, and the kit's richest set of critical steps for guided mode.
         const first = data.samples.find((s) => s.id === 'row_21') || data.samples[0]
         if (first) {
           setSelected(first.id)
