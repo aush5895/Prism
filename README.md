@@ -1,6 +1,8 @@
 # Smart Guided Troubleshooting Engine
 **Samsung PRISM Generative AI Hackathon, 3rd Edition (Y2026–27) — Theme 02**
 
+Video Link :- https://drive.google.com/file/d/1DJ1GcZPYZ2zOEOY4EEnEEkmYHCkCXNKG/view?usp=drivesdk
+
 Turns a vague Galaxy device complaint into a grounded, ordered, schema-valid troubleshooting plan with verified in-app Settings deeplinks.
 
 > **Status: backend, evaluation harness, semantic cache and demo UI complete.** One LLM
